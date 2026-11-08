@@ -35,7 +35,7 @@ const MODELS = { main: MODEL, lite: LITE_MODEL };
 // Seamless 360: Gemini Omni (video) fills the gap between each pair of neighboring photos.
 // Billed per second of output video (~$0.10/s at 720p), so: short clips, one pass, cached on disk.
 const OMNI_MODEL = process.env.GEMINI_VIDEO_MODEL || "gemini-omni-1.1-flash";
-const OMNI_RES = process.env.SPIN_RESOLUTION || "720p";
+const OMNI_RES = process.env.SPIN_RESOLUTION || "360p"; // billed per output token: 360p is far cheaper; the browser scales it up
 // 3 s clips often stop short of the last frame; 5 s reliably reach it (10 s also cut more often).
 const SPIN_SECONDS = Number(process.env.SPIN_SECONDS || 5);
 const run = promisify(execFile);
@@ -158,7 +158,8 @@ async function nominatimFallback(lat, lon, headers) {
 // Same photos -> same id -> served from disk, never paid for twice.
 const SPIN_DIR = join(ROOT, "renders", "spin");
 const spinJobs = new Map();
-const PER_CLIP = 72; // output frames per clip after re-timing (3 s at 24 fps)
+const SPIN_TRIES = Number(process.env.SPIN_TRIES || 1); // no paid re-films by default: a failed gap becomes a cross-fade
+const PER_CLIP = 120; // output frames per clip after re-timing (4 gaps x 120 = 480 frames, one per 0.75 deg)
 
 async function startSpin(req, res) {
   if (!KEY) return send(res, 503, { error: "No GEMINI_API_KEY" });
@@ -185,13 +186,12 @@ function spinStatus(res, id) {
   send(res, job ? 200 : 404, job ? { id, ...job } : { error: "unknown spin" });
 }
 
+const imagePart = (u) => { const m = u.match(/^data:(image\/\w+);base64,(.+)$/); return { type: "image", mime_type: m[1], data: m[2] }; };
 async function omniClip(first, last, prompt) {
-  const part = (u) => { const m = u.match(/^data:(image\/\w+);base64,(.+)$/); return { type: "image", mime_type: m[1], data: m[2] }; };
-  const body = {
-    model: OMNI_MODEL,
-    input: [part(first), part(last), { type: "text", text: prompt }],
-    response_format: { type: "video", resolution: OMNI_RES, aspect_ratio: "16:9" },
-  };
+  return omniCall([imagePart(first), imagePart(last), { type: "text", text: prompt }]);
+}
+async function omniCall(input) {
+  const body = { model: OMNI_MODEL, input, response_format: { type: "video", resolution: OMNI_RES, aspect_ratio: "16:9" } };
   let lastErr;
   for (let attempt = 0; attempt < 2; attempt++) {
     const r = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
@@ -260,6 +260,71 @@ async function evenSpeedIndices(file, count) {
   return out;
 }
 
+// --- one-clip orbit: a free 3D-model turntable (rendered in the browser) is the motion guide, and
+// Omni repaints it as the real house from the hero photo. One 10 s call covers the whole 360, so
+// there are no joins between clips; at 360p that is ~19k output tokens (~$0.34).
+async function startOrbit(req, res) {
+  if (!KEY) return send(res, 503, { error: "No GEMINI_API_KEY" });
+  const { frames, hero, prompt = "" } = await readBody(req, 60 * 1024 * 1024);
+  const img = (f) => typeof f === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(f);
+  if (!Array.isArray(frames) || frames.length < 48 || frames.length > 300 || !frames.every(img) || (hero != null && !img(hero)) || typeof prompt !== "string" || prompt.length > 3000) {
+    return send(res, 400, { error: "Expected { frames: 48-300 data URLs (one full orbit), hero?: data URL, prompt? }" });
+  }
+  const id = createHash("sha1").update(JSON.stringify(["orbit", frames, hero, prompt, OMNI_RES, OMNI_MODEL])).digest("hex").slice(0, 16);
+  const dir = join(SPIN_DIR, id);
+  if (existsSync(join(dir, "done.json"))) return send(res, 200, { id, ...JSON.parse(readFileSync(join(dir, "done.json"), "utf8")), status: "done" });
+  if (!spinJobs.has(id) || spinJobs.get(id).status === "error") {
+    const job = { status: "running", done: 0, total: 1, n: 0, error: null };
+    spinJobs.set(id, job);
+    buildOrbit(id, dir, frames, hero, prompt, job).catch((e) => { job.status = "error"; job.error = String(e.message || e); console.error("orbit", id, e); });
+  }
+  send(res, 200, { id, ...spinJobs.get(id) });
+}
+
+async function buildOrbit(id, dir, frames, hero, prompt, job) {
+  await mkdir(dir, { recursive: true });
+  const guide = join(dir, "guide.mp4"), out = join(dir, "orbit.mp4");
+  if (!existsSync(out)) {
+    const g = join(dir, "g"); await rm(g, { recursive: true, force: true }); await mkdir(g);
+    await Promise.all(frames.map((f, i) => writeFile(join(g, `g_${String(i + 1).padStart(4, "0")}.jpg`), Buffer.from(f.split(",")[1], "base64"))));
+    await run("ffmpeg", ["-loglevel", "error", "-y", "-framerate", String(frames.length / 10), "-i", join(g, "g_%04d.jpg"),
+      "-vf", "scale=640:360,format=yuv420p", "-r", "24", "-c:v", "libx264", "-crf", "20", guide]);
+    await rm(g, { recursive: true, force: true });
+    const text = (hero ? "Turn this plain 3D-model turntable video into real 10-second drone footage of the house in <IMAGE_REF_0>. "
+      : "Restyle this 10-second 3D architectural animation as a photorealistic architectural visualization of the same house. ") +
+      "Keep the camera motion exactly as in the video: one smooth orbit all the way around the house at constant speed, same height and distance, ending where it started. " +
+      "Keep the house shape, size and position in the frame exactly as in the video. " +
+      (hero ? "Its siding, trim, roof, windows, doors, porch, landscaping, trees, lawn, neighboring houses and late-afternoon light match the photo and stay consistent all the way round. "
+        : "Keep the house's siding, trim, roof, windows, doors and colors as shown, made photorealistic. Add a real green lawn, mature trees and softly out-of-focus neighboring houses, consistent all the way round, in late-afternoon light. ") +
+      "Replace the plain gray backdrop and ground with that real yard and neighborhood. Nothing moves except the camera. No cuts, no zoom, no morphing, no people, no cars, no text." +
+      (prompt ? ` ${prompt}` : "");
+    const vid = { type: "video", mime_type: "video/mp4", data: (await readFile(guide)).toString("base64") };
+    await writeFile(out, await omniCall([vid, ...(hero ? [imagePart(hero)] : []), { type: "text", text }]));
+  }
+  const cut = await hardCut(out);
+  const tmp = join(dir, "tmp"); await rm(tmp, { recursive: true, force: true }); await mkdir(tmp);
+  await run("ffmpeg", ["-loglevel", "error", "-i", out, "-vf", "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720", "-q:v", "6", join(tmp, "s_%04d.jpg")]);
+  const src = (await readdir(tmp)).filter((x) => x.endsWith(".jpg")).sort();
+  // The model rarely lands exactly back on its first view, so close the loop with a time overlap:
+  // the ring starts K frames in, and its last K frames cross-fade into the clip's first K frames.
+  // Wrapping from the end of the ring to its start is then continuous (a 1 s blend, never a jump).
+  const { stderr } = await run("ffmpeg", ["-hide_banner", "-i", join(tmp, src[0]), "-i", join(tmp, src[src.length - 1]), "-lavfi", "[0]scale=320:180[x];[1]scale=320:180[y];[x][y]ssim", "-f", "null", "-"]);
+  const loop = Number(stderr.match(/All:([\d.]+)/)?.[1] ?? 0);
+  const K = 24, n = src.length - K;
+  for (let j = 0; j < n; j++) {
+    const to = join(dir, `f_${String(j + 1).padStart(4, "0")}.jpg`), i = K + j, m = i - n; // m >= 0: inside the overlap
+    if (m < 0) { await run("cp", [join(tmp, src[i]), to]); continue; }
+    const t = ((m + 1) / (K + 1)).toFixed(3);
+    await run("ffmpeg", ["-loglevel", "error", "-y", "-i", join(tmp, src[i]), "-i", join(tmp, src[m]),
+      "-filter_complex", `[0][1]blend=all_expr='A*(1-${t})+B*${t}'`, "-q:v", "6", "-update", "1", to]);
+  }
+  await rm(tmp, { recursive: true, force: true });
+  console.log(`orbit ${id}: ${n} frames, hard cut ${cut ? cut.toFixed(2) : "none"}, loop match ${loop.toFixed(2)}`);
+  const meta = { n, total: 1, done: 1, clips: 1, mode: "orbit", cut, loop, resolution: OMNI_RES };
+  await writeFile(join(dir, "done.json"), JSON.stringify(meta));
+  Object.assign(job, meta, { status: "done" });
+}
+
 async function buildSpin(id, dir, frames, prompt, job) {
   await mkdir(dir, { recursive: true });
   const text = `A single continuous ${SPIN_SECONDS}-second drone shot with no cuts. The video is ${SPIN_SECONDS} seconds long. ` +
@@ -277,8 +342,8 @@ async function buildSpin(id, dir, frames, prompt, job) {
       const f = join(dir, `clip_${String(k).padStart(2, "0")}.mp4`);
       if (!existsSync(f)) {
         // The model sometimes holds the first view and then hard-cuts to the last one. That is
-        // exactly the jump we are trying to remove: retry once, then fall back to a soft blend.
-        for (let attempt = 0; attempt < 2 && !existsSync(f); attempt++) try {
+        // exactly the jump we are trying to remove: retry (SPIN_TRIES), then fall back to a soft blend.
+        for (let attempt = 0; attempt < SPIN_TRIES && !existsSync(f); attempt++) try {
           const tmpClip = `${f}.try${attempt}.mp4`;
           if (!existsSync(tmpClip)) await writeFile(tmpClip, await omniClip(frames[k], frames[(k + 1) % N], text)); // a crashed run may have left a paid attempt
           const cut = await hardCut(tmpClip);
@@ -322,6 +387,7 @@ createServer(async (req, res) => {
     if (url.pathname === "/api/render" && req.method === "POST") return await render(req, res);
     if (url.pathname === "/api/osm") return await osm(req, res, url);
     if (url.pathname === "/api/spin" && req.method === "POST") return await startSpin(req, res);
+    if (url.pathname === "/api/orbit" && req.method === "POST") return await startOrbit(req, res);
     if (url.pathname.startsWith("/api/spin/")) return spinStatus(res, url.pathname.slice(10));
     if (url.pathname === "/api/render/status") return send(res, 200, { ready: Boolean(KEY), model: MODEL, lite: LITE_MODEL, video: OMNI_MODEL });
     let path = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, "");

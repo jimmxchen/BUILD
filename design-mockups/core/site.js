@@ -165,7 +165,7 @@ export async function openSiteView(layout) {
     <div class="spinhud">Move your mouse left and right to walk around the house · 360° photoreal <span class="seam"></span> <button type="button" class="explore">Explore map</button></div>
     <div class="gen"><div class="gcard"><div class="ring"></div><b>Building your house on the lot</b><span class="gstat">Generating photoreal views…</span><div class="bar"><i></i></div></div></div>
     <div class="shots" hidden>
-      <div class="thumbs">${Array.from({ length: 8 }, (_, i) => `<button type="button" class="shot" data-i="${i}"><span></span></button>`).join("")}</div>
+      <div class="thumbs">${Array.from({ length: 4 }, (_, i) => `<button type="button" class="shot" data-i="${i}"><span></span></button>`).join("")}</div>
       <div class="side"><b>Photoreal shots</b><span class="sstat"></span><label class="skinrow"><input type="checkbox" class="skin" checked disabled /> Photo skin on 3D house</label><button type="button" class="fullview pri" disabled>360° view</button><button type="button" class="rerender">Re-render</button></div>
     </div>`;
   document.body.appendChild(ov);
@@ -295,10 +295,10 @@ export async function openSiteView(layout) {
   // first (front three-quarter) frame renders first and is passed to every other frame as a
   // reference so materials, landscaping and light match all the way round.
   // off = degrees from the front-door direction; elev = camera pitch; fill = share of frame width.
-  // 8 photos, 45 deg apart. They are the anchors of the seamless spin: Gemini Omni then films the
-  // camera move between each neighboring pair (see /api/spin in serve.mjs). Until those clips are
-  // ready the 8 stills cross-fade.
-  const RING = 8;
+  // 4 photos, 90 deg apart. They texture the 3D model (projection skin); that skinned model's
+  // orbit is the motion guide Gemini Omni turns into one photoreal 360 clip (/api/orbit in
+  // serve.mjs). Until the clip is ready the stills cross-fade.
+  const RING = 4; // 90 deg apart: 4 photos + 4 video gaps keeps a house around $1 (must match the thumbs above)
   const sideName = (off) => {
     const a = ((off % 360) + 360) % 360;
     return a < 22.5 || a >= 337.5 ? "front" : a < 67.5 ? "front-right corner" : a < 112.5 ? "right side" : a < 157.5 ? "back-right corner"
@@ -309,12 +309,13 @@ export async function openSiteView(layout) {
     return { off, elev: 8, fill: 0.6, tier: "main", desc: `Photo from the ${sideName(off)} of the house, at the same distance and height as every other frame of a 360° turntable` };
   });
   // the photo skin (3D map view) has 6 projectors: use 6 evenly spaced ring frames
-  const SKIN_FRAMES = Array.from({ length: 6 }, (_, k) => Math.round((k * RING) / 6));
+  const SKIN_FRAMES = Array.from({ length: Math.min(6, RING) }, (_, k) => Math.round((k * RING) / Math.min(6, RING)));
   const skinSlot = (i) => SKIN_FRAMES.indexOf(i);
   let shotToken = 0, shotTimer = 0, renderReady = null, shotsBusy = false, lastShotError = null;
   const shotEls = [...ov.querySelectorAll(".shot")];
   const shotUrls = [];
-  const captureAngles = () => {
+  const captureAngles = (shots = SHOTS, { w = 1024, h = 576, projectors = true, skinned = false } = {}) => {
+    const wasSkinned = skin.enabled;
     const { width_ft: W, depth_ft: D } = layout.footprint, e = layout.entrance;
     const y = groundY ?? 0, th = houseRoot.rotation.y;
     // Outward normal of the wall with the front door (plan: y grows south), in house-local x/z,
@@ -332,23 +333,25 @@ export async function openSiteView(layout) {
     scene.add(ground); scene.background = new THREE.Color(0xe8e8e4); scene.fog = null;
     const cam = new THREE.PerspectiveCamera(42, 16 / 9, 0.3, 2000); // 16:9 = the video model's frame
     ProjectionSkin.configureCamera(cam); // near/far tuned so the projector depth maps stay precise
-    skin.enable(false); // capture the plain model, not last round's skin
-    renderer.setSize(1024, 576, false);
+    skin.enable(skinned); // photos: the plain model, not last round's skin; orbit guide: the house wearing the photos
+    skin.update(); // projector matrices: update() is skipped while the skin is off
+    renderer.setSize(w, h, false);
     const hfov = 2 * Math.atan(Math.tan((cam.fov * DEG) / 2) * cam.aspect);
-    const out = SHOTS.map((s, i) => {
+    const out = shots.map((s, i) => {
       // distance so the house's bounding sphere spans `fill` of the frame width
       const a = base + s.off * DEG, el = s.elev * DEG, r = radius / Math.tan((hfov * s.fill) / 2);
       cam.position.set(center.x + Math.sin(a) * Math.cos(el) * r, Math.max(y + 1.6, center.y + Math.sin(el) * r), center.z + Math.cos(a) * Math.cos(el) * r);
       cam.lookAt(center.x, center.y - (s.elev > 10 ? 1 : 0.5), center.z); cam.updateMatrixWorld();
       renderer.render(scene, cam);
       const url = renderer.domElement.toDataURL("image/jpeg", 0.9); // read back in the same task as the render
-      if (skinSlot(i) >= 0) skin.captureProjector(skinSlot(i), cam, 1024, 576); // this exact camera becomes a projector
+      if (projectors && skinSlot(i) >= 0) skin.captureProjector(skinSlot(i), cam, w, h); // this exact camera becomes a projector
       return url;
     });
     scene.remove(ground); ground.geometry.dispose(); ground.material.dispose();
     scene.background = saved.bg; scene.fog = saved.fog;
     if (tiles) tiles.group.visible = saved.tiles;
     if (saved.lawn) scene.add(lawn);
+    if (skinned) skin.enable(wasSkinned);
     resize(); renderer.render(scene, camera);
     return out;
   };
@@ -433,13 +436,14 @@ export async function openSiteView(layout) {
   const seamStat = (t) => { $(".seam").textContent = t; };
   const makeSeamless = async (token) => {
     seq = null;
-    if (!shotUrls.slice(0, RING).every(Boolean) || shotUrls.length < RING) { seamStat(""); return; }
+    if (!shotUrls[0]) { seamStat(""); return; }
     try {
-      seamStat("Filming the in-between views…");
-      let r = await fetch("/api/spin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ frames: shotUrls.slice(0, RING) }) });
+      seamStat("Filming the 360° orbit…");
+      // one clip for the whole turn: our 3D model wearing the photos (projection skin), orbiting; Omni makes it real
+      let r = await fetch("/api/orbit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ frames: orbitFrames(240) }) });
       let job = await r.json();
       while (token === shotToken && !disposed && job.status === "running") {
-        seamStat(`Filming the in-between views… ${job.done}/${job.total}`);
+        seamStat(`Filming the 360° orbit…`);
         await new Promise((res) => setTimeout(res, 2500));
         job = await (await fetch(`/api/spin/${job.id}`)).json();
       }
@@ -463,6 +467,10 @@ export async function openSiteView(layout) {
   };
   $(".skin").addEventListener("change", (e) => skin.enable(e.target.checked));
   ov.seamless = () => makeSeamless(shotToken); // dev hook: rebuild the seamless spin from the current photos
+  // A full 360 orbit of the plain 3D model, same camera path as the photos (free: rendered locally).
+  // It is the motion guide for the one-clip photoreal orbit (/api/orbit).
+  const orbitFrames = (n = 240) => captureAngles(Array.from({ length: n }, (_, k) => ({ off: 30 + (k * 360) / n, elev: 8, fill: 0.6 })), { w: 640, h: 360, projectors: false, skinned: true });
+  ov.orbitFrames = orbitFrames; // dev hook
   const scheduleShots = () => { if (disposed) return; clearTimeout(shotTimer); shotTimer = setTimeout(() => { if (!disposed) runShots(); }, 400); };
   $(".rerender").addEventListener("click", runShots);
   // --- 360 view: photos only. The ring frames are shown full screen; moving the mouse left/right
