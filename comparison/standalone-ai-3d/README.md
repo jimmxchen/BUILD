@@ -6,14 +6,17 @@ This is the default placeholder in `frontend/src/components/PromptBox.tsx` and t
 
 ## Files
 
-- `index.html` + `scene.js` + `layout.json`: a one-shot ChatGPT-designed interactive cutaway house. It uses only browser Canvas and has no BUILD runtime dependency.
-- `chatgpt-house-3d.png`: image captured from that scene at the default camera angle.
+- `index-chatgpt.html`: standalone ChatGPT scene. Open it directly in a browser; drag to orbit and scroll to zoom.
+- `house-plan-chatgpt.png`: ChatGPT plan image.
+- `claude-house.html`: standalone Claude scene. Open it directly in a browser; drag to orbit and scroll to zoom.
+- `claude-house-source.js`: source used to build the bundled Claude scene.
+- `claude_house_plan_view.png` and `claude_house_elevated_view.png`: Claude plan and elevated views.
 - `compare.html`: local three-column viewer for BUILD, ChatGPT, and Claude screenshots.
 - `CLAUDE_PROMPT.md`: one full task prompt to paste verbatim into fresh ChatGPT and Claude conversations.
 
-## View the ChatGPT scene
+## Open the scenes
 
-From this folder, run `python3 -m http.server 8765`, then open `http://localhost:8765`. Drag to orbit, scroll to zoom, and use **Save PNG** to export the current view. The scene is a visual concept. It has not passed BUILD's geometry checker or any building-code review.
+Open `index-chatgpt.html` or `claude-house.html` directly in a browser. Both are bundled HTML files, so no server or build step is needed. Drag to orbit and scroll to zoom. The scenes are visual concepts and have not passed BUILD's geometry checker or building-code review.
 
 ## Compare
 
