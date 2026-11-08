@@ -1,4 +1,4 @@
-# Walkthru
+# Build
 
 **Describe a home. Get a floor plan you can inspect, edit, and walk through.**
 
@@ -98,7 +98,7 @@ The evaluation makes live model calls and may produce different results on anoth
 
 ## Current limitations
 
-Walkthru is a design exploration tool, not a substitute for an architect, engineer, survey, permitting review, or code check. Its rules cover selected geometric and prompt requirements; they do not represent all accessibility, structural, environmental, or local building requirements.
+Build is a design exploration tool, not a substitute for an architect, engineer, survey, permitting review, or code check. Its rules cover selected geometric and prompt requirements; they do not represent all accessibility, structural, environmental, or local building requirements.
 
 ## License
 
