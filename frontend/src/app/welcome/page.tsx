@@ -3,8 +3,8 @@ import Landing from "@/components/landing/Landing";
 import "./welcome.css";
 
 export const metadata: Metadata = {
-  title: "BUILD — Imagine your home. Then walk through it.",
-  description: "Turn a home idea into a rule-checked floor plan and explore it in 3D. Describe, generate, explore and refine with BUILD.",
+  title: "BUILD — Design your home. Step inside before it’s built.",
+  description: "Turn a simple description into an editable, rule-checked floor plan and an explorable 3D home. Walk the space, refine the layout, and see your ideas take shape.",
 };
 
 export default function Welcome() { return <Landing />; }
