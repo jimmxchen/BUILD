@@ -19,6 +19,16 @@ npm run build -- --webpack
 Run the build before a standalone type check on a fresh checkout, so Next generates
 its route types. The existing app needs its normal API configuration for generation.
 
+## Selected visual direction
+
+The landing page follows option 2, **Site model**, from
+`design-mockups/index.html` and `design-mockups/02-site-model/index.html`.
+This is also the existing app rendered by `SiteModel.tsx`. Its visual identity
+combines a light green floating island, sky backdrop, warm paper, Hanken Grotesk,
+rounded white panels and cobalt actions. The landing hero uses a model-first
+composition with a rounded CTA bar; supporting sections use the same calm palette.
+Only landing files change. The app default, shared renderer and app UI remain intact.
+
 ## Implementation
 
 - `src/app/welcome/page.tsx` and `welcome.css`: isolated route, metadata and scoped
@@ -26,7 +36,10 @@ its route types. The existing app needs its normal API configuration for generat
 - `src/components/landing/Landing.tsx`: narrative, original uncropped 2:1 logo,
   preview toggle, sourced statistics, semantic navigation, manual tour controls.
 - `HouseScene.tsx`: React Three Fiber scene, original wall builder, room floors,
-  real window/door openings and illustrative furnishings. Rendering runs on demand,
+  real window/door openings and illustrative furnishings. Reuses the existing
+  `createFloatingIsland` export from `src/build/atmosphere.js` with the app’s exact
+  landscape colors. The island is mounted and its geometry/materials explicitly
+  disposed by the landing component. Rendering runs on demand,
   DPR is capped at 1.5, and R3F disposes declarative geometry/materials on unmount.
 - `geometry.ts`: actual bundled sample and eight camera keyframes in feet.
   Smoothstep interpolation stays within doorway-aligned segments. The camera

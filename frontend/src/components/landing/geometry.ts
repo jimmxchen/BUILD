@@ -8,7 +8,7 @@ export const walls = buildWalls(layout);
 // All coordinates are feet. The path descends OUTSIDE the house, then crosses
 // actual openings. Smoothstep segments stay inside their axis-aligned corridors.
 export const stops = [
-  { position: [60, 43, 54], target: [30, 0, 14], label: "The whole picture", detail: "A shared geometric model. Every room in its place." },
+  { position: [86, 48, 85], target: [30, -10, 14], label: "The whole picture", detail: "A shared geometric model. Every room in its place." },
   { position: [14, 5.5, 35], target: [14, 5.5, 18], label: "At your front door", detail: "A human perspective, 5′6″ above the floor." },
   { position: [14, 5.5, 20], target: [8, 5, 12], label: "Room to live", detail: "Living room · 28 × 15 ft · 420 sq ft" },
   { position: [8, 5.5, 20], target: [8, 5, 5], label: "Connected spaces", detail: "A 14 ft opening connects living and kitchen." },
