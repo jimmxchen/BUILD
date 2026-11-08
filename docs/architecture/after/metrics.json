@@ -1,0 +1,208 @@
+{
+  "conventional_3bed": {
+    "hard_checks_passed": 12,
+    "hard_checks_total": 12,
+    "hard_failures": [],
+    "shape_violations": [
+      {
+        "id": "primary_bedroom",
+        "width": 25.5,
+        "depth": 11.0,
+        "aspect": 2.318,
+        "minimum_dimension_failed": false,
+        "aspect_preference_failed": true
+      }
+    ],
+    "registry_shape_violations": 0,
+    "area_failing_registry_shape_pct": 0.0,
+    "area_in_shape_violating_rooms_pct": 15.78,
+    "circulation_pct": 10.46,
+    "program_room_id_coverage_pct": 100.0,
+    "solver_seconds": 0.0623,
+    "source": "synthetic program; not a live planner evaluation",
+    "requested_sqft": 1800.0
+  },
+  "warehouse_8bed": {
+    "hard_checks_passed": 12,
+    "hard_checks_total": 12,
+    "hard_failures": [],
+    "shape_violations": [
+      {
+        "id": "primary_bedroom",
+        "width": 21.0,
+        "depth": 12.0,
+        "aspect": 1.75,
+        "minimum_dimension_failed": false,
+        "aspect_preference_failed": true
+      },
+      {
+        "id": "great_room",
+        "width": 47.0,
+        "depth": 18.0,
+        "aspect": 2.611,
+        "minimum_dimension_failed": false,
+        "aspect_preference_failed": true
+      },
+      {
+        "id": "laundry",
+        "width": 4.5,
+        "depth": 13.0,
+        "aspect": 2.889,
+        "minimum_dimension_failed": false,
+        "aspect_preference_failed": true
+      }
+    ],
+    "registry_shape_violations": 0,
+    "area_failing_registry_shape_pct": 0.0,
+    "area_in_shape_violating_rooms_pct": 10.81,
+    "circulation_pct": 19.79,
+    "program_room_id_coverage_pct": 100.0,
+    "solver_seconds": 0.4636,
+    "source": "saved live planner program",
+    "requested_sqft": 10000.0
+  },
+  "open_loft": {
+    "hard_checks_passed": 12,
+    "hard_checks_total": 12,
+    "hard_failures": [],
+    "shape_violations": [
+      {
+        "id": "primary_bedroom",
+        "width": 31.5,
+        "depth": 18.0,
+        "aspect": 1.75,
+        "minimum_dimension_failed": false,
+        "aspect_preference_failed": true
+      }
+    ],
+    "registry_shape_violations": 0,
+    "area_failing_registry_shape_pct": 0.0,
+    "area_in_shape_violating_rooms_pct": 19.89,
+    "circulation_pct": 6.95,
+    "program_room_id_coverage_pct": 100.0,
+    "solver_seconds": 0.0858,
+    "source": "synthetic program; not a live planner evaluation",
+    "requested_sqft": 3000.0
+  },
+  "small_home_dining": {
+    "hard_checks_passed": 12,
+    "hard_checks_total": 12,
+    "hard_failures": [],
+    "shape_violations": [
+      {
+        "id": "primary_bedroom",
+        "width": 19.0,
+        "depth": 10.0,
+        "aspect": 1.9,
+        "minimum_dimension_failed": false,
+        "aspect_preference_failed": true
+      },
+      {
+        "id": "dining",
+        "width": 8.5,
+        "depth": 14.0,
+        "aspect": 1.647,
+        "minimum_dimension_failed": true,
+        "aspect_preference_failed": true
+      }
+    ],
+    "registry_shape_violations": 0,
+    "area_failing_registry_shape_pct": 0.0,
+    "area_in_shape_violating_rooms_pct": 34.28,
+    "circulation_pct": 12.81,
+    "program_room_id_coverage_pct": 100.0,
+    "solver_seconds": 0.0384,
+    "source": "synthetic program; not a live planner evaluation",
+    "requested_sqft": 900.0
+  },
+  "large_kitchen": {
+    "hard_checks_passed": 12,
+    "hard_checks_total": 12,
+    "hard_failures": [],
+    "shape_violations": [
+      {
+        "id": "primary_bedroom",
+        "width": 28.5,
+        "depth": 13.0,
+        "aspect": 2.192,
+        "minimum_dimension_failed": false,
+        "aspect_preference_failed": true
+      }
+    ],
+    "registry_shape_violations": 0,
+    "area_failing_registry_shape_pct": 0.0,
+    "area_in_shape_violating_rooms_pct": 15.19,
+    "circulation_pct": 9.41,
+    "program_room_id_coverage_pct": 100.0,
+    "solver_seconds": 0.082,
+    "source": "synthetic program; not a live planner evaluation",
+    "requested_sqft": 2500.0
+  },
+  "multiple_workspaces": {
+    "hard_checks_passed": 12,
+    "hard_checks_total": 12,
+    "hard_failures": [],
+    "shape_violations": [
+      {
+        "id": "primary_bedroom",
+        "width": 26.5,
+        "depth": 13.0,
+        "aspect": 2.038,
+        "minimum_dimension_failed": false,
+        "aspect_preference_failed": true
+      },
+      {
+        "id": "office_1",
+        "width": 10.0,
+        "depth": 17.0,
+        "aspect": 1.7,
+        "minimum_dimension_failed": false,
+        "aspect_preference_failed": true
+      },
+      {
+        "id": "office_3",
+        "width": 10.0,
+        "depth": 17.0,
+        "aspect": 1.7,
+        "minimum_dimension_failed": false,
+        "aspect_preference_failed": true
+      },
+      {
+        "id": "office_2",
+        "width": 10.0,
+        "depth": 17.0,
+        "aspect": 1.7,
+        "minimum_dimension_failed": false,
+        "aspect_preference_failed": true
+      },
+      {
+        "id": "office_4",
+        "width": 10.0,
+        "depth": 17.0,
+        "aspect": 1.7,
+        "minimum_dimension_failed": false,
+        "aspect_preference_failed": true
+      },
+      {
+        "id": "dining",
+        "width": 11.0,
+        "depth": 20.0,
+        "aspect": 1.818,
+        "minimum_dimension_failed": false,
+        "aspect_preference_failed": true
+      }
+    ],
+    "registry_shape_violations": 0,
+    "area_failing_registry_shape_pct": 0.0,
+    "area_in_shape_violating_rooms_pct": 38.23,
+    "circulation_pct": 18.99,
+    "program_room_id_coverage_pct": 100.0,
+    "solver_seconds": 0.1337,
+    "source": "synthetic program; not a live planner evaluation",
+    "requested_sqft": 3000.0
+  },
+  "overspecified": {
+    "error": "The requested court and other rooms need about 12519 sq ft including circulation. Increase the building area, request a half/compact recreational court, or reduce the other rooms; no spaces were discarded.",
+    "solver_seconds": 0.0004
+  }
+}

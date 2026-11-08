@@ -485,12 +485,13 @@ async function start(prompt) {
   const nextLine = () => { typeLine(lines[Math.min(li, lines.length - 1)]); li++; waitTimer = setTimeout(nextLine, li < lines.length ? 2300 : 6000); };
   nextLine();
   plan = await pending;
+  clearTimeout(waitTimer);
   if (plan.failure) {
     setState("landing"); document.body.classList.remove("waiting", "leaving");
     toast(plan.failure.message); $("#clarify").hidden = false; $("#clarifyQ").textContent = plan.failure.message;
     $("#clarifyOpts").replaceChildren(); return;
   }
-  clearTimeout(waitTimer); document.body.classList.remove("waiting");
+  document.body.classList.remove("waiting");
   // the island grows to the real footprint, the house is built hidden, then the story plays it in
   mountIsland(plan.layout); mountHouse(plan.layout); resetHouse();
   const g = island.group; g.scale.setScalar(0.85); tween(T(1200), (k) => g.scale.setScalar(0.85 + 0.15 * k), ease.spring);
