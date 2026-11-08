@@ -1,350 +1,156 @@
-// BUILD landing page. Server component; interactive islands are imported from ./interactive and
-// ./Walkthrough. Visual language: the Site model app (warm paper, island greens, Hanken Grotesk,
-// rounded white panels) laid over an architectural drafting grid.
+// BUILD presentation intro: hero → problem → scale → solution → into the demo.
+// Visual language is the Site model app's: sky gradient, cloud sea, the floating island,
+// white rounded panels, 999px pills, its stepper pills and rule cards, Hanken Grotesk.
 import { IsoHouse } from "./IsoHouse";
-import { Logo, Mark } from "./Logo";
-import { PlanDrawing } from "./PlanDrawing";
-import { Walkthrough } from "./Walkthrough";
-import { AssemblePlan, CountUp, EditCompare, NavBar, RevealObserver, Showcase, WallShift } from "./interactive";
-import { APP_URL, GITHUB_URL, LAYOUT, PROMPT, RULE_LABELS, STATS, totalArea } from "./data";
+import { Logo } from "./Logo";
+import { BuildSequence, CountUp, RevealObserver, SectionDots } from "./interactive";
+import { APP_URL, GITHUB_URL, LAYOUT, PROMPT, SCALE, totalArea } from "./data";
 
-const NAV = [
-  { href: "#why", label: "Why BUILD" },
-  { href: "#how", label: "How it works" },
-  { href: "#explore", label: "Explore" },
-  { href: "#technology", label: "Technology" },
-  { href: "#try", label: "Try BUILD" },
+const SECTIONS = [
+  { id: "intro", label: "BUILD" },
+  { id: "problem", label: "The problem" },
+  { id: "scale", label: "Who needs it" },
+  { id: "solution", label: "Our solution" },
+  { id: "demo", label: "Demo" },
 ];
 
 const Arrow = () => (
   <svg className="bl-arrow" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 8H13M9 4L13 8L9 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
 );
 
-function GridLabels({ cols = "ABCDEFGHIJKL", rows = 6 }: { cols?: string; rows?: number }) {
+function Clouds({ dense = false }: { dense?: boolean }) {
   return (
-    <div className="bl-grid-labels" aria-hidden="true">
-      <div className="bl-grid-cols">{cols.split("").map((c) => <span key={c}>{c}</span>)}</div>
-      <div className="bl-grid-rows">{Array.from({ length: rows }, (_, i) => <span key={i}>{i + 1}</span>)}</div>
+    <div className={`bl-clouds ${dense ? "is-dense" : ""}`} aria-hidden="true">
+      <i style={{ left: "-6%", top: "58%", width: "38%" }} /><i style={{ left: "24%", top: "70%", width: "30%" }} />
+      <i style={{ left: "58%", top: "62%", width: "36%" }} /><i style={{ left: "82%", top: "48%", width: "28%" }} />
+      <i style={{ left: "6%", top: "14%", width: "18%", opacity: 0.55 }} /><i style={{ left: "74%", top: "10%", width: "20%", opacity: 0.5 }} />
     </div>
   );
 }
 
-function SectionHead({ id, num, kicker, title, children }: { id: string; num: string; kicker: string; title: React.ReactNode; children?: React.ReactNode }) {
-  return (
-    <header className="bl-shead" data-reveal>
-      <p className="bl-kicker"><span className="bl-num">{num}</span><span className="bl-kicker-dot" />{kicker}</p>
-      <h2 id={id}>{title}</h2>
-      {children}
-    </header>
-  );
+function Kicker({ num, children }: { num: string; children: React.ReactNode }) {
+  return <p className="bl-kicker"><span className="bl-num">{num}</span><span className="bl-kicker-dot" />{children}</p>;
 }
 
 export default function Landing() {
   const sqft = Math.round(totalArea(LAYOUT));
-  const checks = LAYOUT.checks;
   return (
     <div className="bl" id="top">
       <a className="bl-skip" href="#main">Skip to content</a>
       <RevealObserver />
-      <NavBar links={NAV} />
+      <header className="bl-nav">
+        <a href="#intro" className="bl-nav-logo" aria-label="BUILD, back to top"><Logo size={26} /></a>
+        <a className="bl-ghost" href={APP_URL}>Open the demo</a>
+      </header>
+      <SectionDots sections={SECTIONS} />
 
       <main id="main">
         {/* ---------------- HERO ---------------- */}
-        <section className="bl-hero" aria-labelledby="hero-title">
-          <div className="bl-hero-grid" aria-hidden="true" />
-          <GridLabels />
-          <div className="bl-wrap bl-hero-inner">
-            <div className="bl-hero-copy">
-              <p className="bl-kicker bl-hero-kicker"><span className="bl-kicker-dot" />Residential design, from a sentence</p>
-              <h1 id="hero-title">Design your home. <span>Step inside before it’s built.</span></h1>
-              <p className="bl-lede">Turn a simple description into an editable floor plan and an explorable 3D home. Walk the space, refine the layout, and see your ideas take shape.</p>
-              <div className="bl-actions">
-                <a className="bl-btn bl-btn-primary" href={APP_URL}>Start designing <Arrow /></a>
-                <a className="bl-btn bl-btn-ghost" href="#explore">Explore the walkthrough</a>
-              </div>
-              <ol className="bl-flow" aria-label="How BUILD works">
-                <li><span className="bl-num">01</span>Description</li>
-                <li><span className="bl-num">02</span>Geometry</li>
-                <li><span className="bl-num">03</span>Space</li>
-              </ol>
-            </div>
-
-            <figure className="bl-hero-visual">
-              <div className="bl-hero-prompt" aria-hidden="true">
-                <span className="bl-hero-prompt-text">{PROMPT}</span>
-                <span className="bl-hero-prompt-btn">Build it</span>
-              </div>
-              <div className="bl-hero-model">
-                <IsoHouse layout={LAYOUT} title="Axonometric model of the generated house: eleven rooms, walls cut at five feet to show the interior." />
-                <div className="bl-hero-dim bl-num" aria-hidden="true">61′–0″ × 28′–0″ · {sqft.toLocaleString()} ft²</div>
-              </div>
-              <figcaption className="bl-hero-checks">
-                <span className="bl-check-dot" aria-hidden="true">✓</span>
-                <span><strong className="bl-num">{checks.filter((c) => c.pass).length} of {checks.length}</strong> layout rules pass</span>
-                <span className="bl-hero-checks-sep" aria-hidden="true" />
-                <span className="bl-muted">Bundled sample, generated by BUILD’s solver</span>
-              </figcaption>
-            </figure>
+        <section className="bl-hero bl-screen" id="intro" aria-labelledby="hero-title">
+          <Clouds />
+          <div className="bl-hero-model">
+            <IsoHouse island layout={LAYOUT} title={`A generated three-bedroom house, ${sqft.toLocaleString()} square feet, on the floating island from the BUILD app.`} />
           </div>
+          <div className="bl-hero-copy">
+            <h1 id="hero-title">Design your home.<br /><span>Step inside before it’s built.</span></h1>
+            <p className="bl-sub">BUILD turns a sentence into a rule-checked floor plan and a 3D home you can walk through.</p>
+            <a className="bl-prompt" href={APP_URL} aria-label={`Open the BUILD demo. Example brief: ${PROMPT}`}>
+              <span className="bl-prompt-text">{PROMPT}<i className="bl-caret" aria-hidden="true" /></span>
+              <span className="bl-cta">Build it</span>
+            </a>
+          </div>
+          <a className="bl-scrollcue" href="#problem"><span>Why it matters</span><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 3V13M4 9L8 13L12 9" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg></a>
         </section>
 
         {/* ---------------- PROBLEM ---------------- */}
-        <section className="bl-problem" aria-labelledby="why-title" id="why">
+        <section className="bl-problem bl-screen" id="problem" aria-labelledby="problem-title">
+          <div className="bl-wrap bl-problem-grid">
+            <div data-reveal>
+              <Kicker num="01">The problem</Kicker>
+              <h2 id="problem-title">Design decisions are expensive. <em>Understanding them shouldn’t be.</em></h2>
+              <p className="bl-lede">Homeowners commit to layouts they’ve only seen as drawings. By the time a space can be experienced, changing it is slow and costly.</p>
+            </div>
+            <ul className="bl-fails" aria-label="Where residential design breaks down">
+              <li className="bl-fail" data-reveal>
+                <span className="ic" aria-hidden="true">!</span>
+                <div><b>High barriers to entry</b><span>A workable floor plan takes professional help, specialist software, and several rounds of revision.</span></div>
+              </li>
+              <li className="bl-fail" data-reveal>
+                <span className="ic" aria-hidden="true">!</span>
+                <div><b>Hard to picture</b><span>A drawing fixes dimensions, not experience. A hall that looks fine on paper can feel tight at eye level.</span></div>
+              </li>
+              <li className="bl-fail" data-reveal>
+                <span className="ic" aria-hidden="true">!</span>
+                <div><b>Costly to change</b><span>Move one wall and the doors, rooms and circulation around it move too.</span></div>
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        {/* ---------------- SCALE ---------------- */}
+        <section className="bl-scale bl-screen" id="scale" aria-labelledby="scale-title">
           <div className="bl-wrap">
-            <SectionHead id="why-title" num="01" kicker="The problem" title={<>Design decisions are expensive. <em>Understanding them shouldn’t be.</em></>} />
-            <div className="bl-problem-intro" data-reveal>
-              <p className="bl-big">Residential design remains costly and fragmented. Turning an idea into a workable floor plan usually takes professional help, specialized software, and several rounds of revision before a homeowner can meaningfully judge the result.</p>
-              <p>The difficulty goes beyond cost and time. Architectural drawings communicate dimensions and structure, but not always how a space will feel. A hallway that looks adequate on paper can feel tight at eye level. A living room that reads as generous in plan can work differently once its proportions, entrances and circulation are taken into account.</p>
-              <p>So important spatial decisions are often made before homeowners clearly understand the spaces they are committing to. Visualization tools help, but moving between design, revision and immersive exploration can still mean separate tools and technical expertise.</p>
+            <div data-reveal>
+              <Kicker num="02">Who needs this</Kicker>
+              <h2 id="scale-title">This isn’t a niche problem.</h2>
             </div>
-
-            <ol className="bl-pains">
-              <li className="bl-pain" data-reveal>
-                <div className="bl-pain-fig bl-pain-sheets" aria-hidden="true">
-                  <svg viewBox="0 0 220 150">
-                    <g className="bl-sheet bl-sheet-3"><rect x="58" y="14" width="140" height="96" rx="4" /><text x="66" y="28">A-301 · SECTIONS</text></g>
-                    <g className="bl-sheet bl-sheet-2"><rect x="40" y="28" width="140" height="96" rx="4" /><text x="48" y="42">A-201 · ELEVATIONS</text></g>
-                    <g className="bl-sheet bl-sheet-1">
-                      <rect x="22" y="42" width="140" height="96" rx="4" />
-                      <text x="30" y="56">A-101 · FLOOR PLAN</text>
-                      <path d="M38 66 H146 V126 H38 Z M92 66 V100 M38 100 H124" fill="none" stroke="var(--ink)" strokeWidth="2.2" />
-                      <path d="M38 132 H146 M38 129 V135 M146 129 V135" stroke="var(--muted)" strokeWidth="0.8" />
-                      <path className="bl-cloud" d="M100 104 q4 -6 9 -2 q4 -6 9 -1 q6 -2 6 4 q5 3 1 8 q2 6 -5 6 q-3 5 -9 2 q-5 4 -9 -1 q-6 1 -5 -5 q-5 -5 3 -11z" fill="none" stroke="#c8664f" strokeWidth="1.2" />
-                      <text x="128" y="124" fill="#c8664f">REV C</text>
-                    </g>
-                  </svg>
-                </div>
-                <span className="bl-num bl-pain-num">01</span>
-                <h3>High barriers to entry</h3>
-                <p>Custom residential design involves professional services, specialist software and iterative planning, often across separate drawing sets, before anything can be evaluated.</p>
-              </li>
-              <li className="bl-pain" data-reveal>
-                <div className="bl-pain-fig bl-pain-eye" aria-hidden="true">
-                  <svg viewBox="0 0 220 150">
-                    <g className="bl-eye-plan">
-                      <rect x="14" y="20" width="72" height="110" fill="#fbfaf7" />
-                      <path d="M14 20 H86 V130 H14 Z" fill="none" stroke="var(--ink)" strokeWidth="2.4" />
-                      <path d="M38 20 V130 M62 20 V130" stroke="var(--ink)" strokeWidth="1.2" strokeDasharray="0" />
-                      <path className="bl-eye-cone" d="M50 118 L40 40 L60 40 Z" fill="var(--leaf-300)" opacity=".55" />
-                      <circle cx="50" cy="118" r="3" fill="var(--leaf-700)" />
-                      <text x="50" y="146" textAnchor="middle">plan · 4′ hall</text>
-                    </g>
-                    <g className="bl-eye-persp">
-                      <rect x="112" y="20" width="96" height="110" fill="#fbfaf7" stroke="var(--line-strong)" />
-                      <path d="M112 20 L148 62 L172 62 L208 20 M112 130 L148 92 L172 92 L208 130 M148 62 V92 M172 62 V92" fill="none" stroke="var(--ink)" strokeWidth="1.2" />
-                      <path d="M148 62 H172 V92 H148 Z" fill="var(--leaf-100)" />
-                      <path d="M112 75 H208" stroke="var(--leaf-700)" strokeWidth=".8" strokeDasharray="3 3" />
-                      <text x="160" y="146" textAnchor="middle">eye level · 5′6″</text>
-                    </g>
-                  </svg>
-                </div>
-                <span className="bl-num bl-pain-num">02</span>
-                <h3>Spatial understanding is hard</h3>
-                <p>A two-dimensional drawing fixes dimensions but cannot fully convey what it is like to move through a space: sightlines, enclosure, the width of a corridor at eye level.</p>
-              </li>
-              <li className="bl-pain" data-reveal>
-                <div className="bl-pain-fig" aria-hidden="false"><WallShift /></div>
-                <span className="bl-num bl-pain-num">03</span>
-                <h3>Iteration is costly</h3>
-                <p>Changing one room’s size moves walls, doors and circulation in the rooms around it. Each revision ripples through interconnected parts of the design.</p>
-              </li>
-            </ol>
-
-            <div className="bl-stats" data-reveal>
-              <div className="bl-stat-feature">
-                <div className="bl-stat-value"><CountUp value={STATS.feature.value} suffix={STATS.feature.suffix} /></div>
-                <p className="bl-stat-label">{STATS.feature.label}</p>
-                <div className="bl-split" role="img" aria-label="2025 renovations: 37% over budget, 35% on budget, 3% under budget, 25% set no budget.">
-                  {STATS.feature.split.map((s) => (
-                    <span key={s.label} style={{ flexGrow: s.value }} className={`bl-split-${s.label.split(" ")[0].toLowerCase()}`}>
-                      <i className="bl-num">{s.value}%</i><b>{s.label}</b>
-                    </span>
-                  ))}
-                </div>
-                <p className="bl-source"><a href={STATS.feature.href} target="_blank" rel="noreferrer">{STATS.feature.source}</a></p>
-              </div>
-              <ul className="bl-stat-list">
-                {STATS.supporting.map((s) => (
-                  <li key={s.source + s.value}>
-                    <div className="bl-stat-value bl-stat-sm"><CountUp value={s.value} prefix={s.prefix} suffix={s.suffix} decimals={s.value % 1 ? 1 : 0} /></div>
-                    <p>{s.label}</p>
-                    <p className="bl-source"><a href={s.href} target="_blank" rel="noreferrer">{s.source}</a></p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <p className="bl-stats-note" data-reveal>Houzz figures describe renovation projects by U.S. homeowners on Houzz, not new custom-home design. They show how often plans and budgets move once building starts.</p>
-
+            <ul className="bl-stats">
+              {SCALE.map((s, i) => (
+                <li key={s.source + i} data-reveal style={{ transitionDelay: `${i * 90}ms` }}>
+                  <div className="bl-stat-value"><CountUp value={s.value} prefix={s.prefix} suffix={s.suffix} /></div>
+                  <p>{s.label}</p>
+                  <a className="bl-source" href={s.href} target="_blank" rel="noreferrer">{s.source}</a>
+                </li>
+              ))}
+            </ul>
             <p className="bl-bridge" data-reveal>The challenge isn’t just creating a floor plan. <span>It’s understanding the space before it exists.</span></p>
           </div>
         </section>
 
         {/* ---------------- SOLUTION ---------------- */}
-        <section className="bl-how" id="how" aria-labelledby="how-title">
-          <div className="bl-wrap">
-            <SectionHead id="how-title" num="02" kicker="How it works" title={<>From description <em>to dimension.</em></>}>
-              <p className="bl-lede">BUILD converts natural-language ideas into structured residential layouts, validates their geometry, and makes each design explorable in three dimensions.</p>
-            </SectionHead>
-
-            <div className="bl-step bl-step-1" data-reveal>
-              <div className="bl-step-text">
-                <span className="bl-num bl-step-num">01</span>
-                <h3>Describe your space</h3>
-                <p>Write the home you want the way you would say it. Bedrooms, baths, an open kitchen, an office, a rough size. BUILD asks a follow-up question only when a brief is ambiguous.</p>
-              </div>
-              <div className="bl-step-visual">
-                <div className="bl-promptbox">
-                  <p className="bl-promptbox-label">Describe a home</p>
-                  <div className="bl-prompt" role="img" aria-label={`Prompt: ${PROMPT}`}>
-                    <span className="bl-prompt-text">{PROMPT}<i className="bl-caret" aria-hidden="true" /></span>
-                    <span className="bl-prompt-btn">Build it</span>
-                  </div>
-                  <div className="bl-chips" aria-hidden="true">
-                    <span>2 bed cottage with a big kitchen, 1,100 sq ft</span><span>4 bed family home with a mudroom</span><span>Studio with a home office, 650 sq ft</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bl-step bl-step-2" data-reveal>
-              <div className="bl-step-text">
-                <span className="bl-num bl-step-num">02</span>
-                <h3>Generate a geometric floor plan</h3>
-                <p>The brief becomes a room program, and a solver places every room, wall, door and window on a half-foot grid. The plan is drawn from that data, layer by layer.</p>
-              </div>
-              <div className="bl-step-visual"><AssemblePlan /></div>
-            </div>
-
-            <div className="bl-step bl-step-3" data-reveal>
-              <div className="bl-step-text">
-                <span className="bl-num bl-step-num">03</span>
-                <h3>Explore and refine</h3>
-                <p>Orbit the model or walk through it, then ask for changes in plain language. Rooms you didn’t mention stay where they were, and every rule is re-checked.</p>
-                <figure className="bl-step-walk">
-                  <img src="/landing/app-walk.webp" alt="BUILD first-person walkthrough of the living room with a minimap." width={1600} height={1000} loading="lazy" decoding="async" />
-                  <figcaption>The same plan in BUILD’s walkthrough mode.</figcaption>
-                </figure>
-              </div>
-              <div className="bl-step-visual">
-                <EditCompare />
-                <p className="bl-fine">Shown: real solver output. The kitchen’s target area is raised and the program is re-solved against the previous layout, then re-checked. In the app, the design chat turns your sentence into that change.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ---------------- WALKTHROUGH ---------------- */}
-        <Walkthrough />
-
-        {/* ---------------- TECHNOLOGY ---------------- */}
-        <section className="bl-tech" id="technology" aria-labelledby="tech-title">
-          <div className="bl-wrap">
-            <SectionHead id="tech-title" num="03" kicker="Technology" title={<>Designed with AI. <em>Grounded in geometry.</em></>}>
-              <p className="bl-lede">Language models can interpret design intent, but they do not reliably enforce exact spatial relationships. BUILD separates creative planning from geometric execution: a structured layout model and deterministic validation check whether each design satisfies its supported constraints.</p>
-            </SectionHead>
-
-            <div className="bl-pipe" data-reveal>
-              <ol className="bl-pipe-nodes">
-                <li className="bl-pipe-in"><span className="bl-num">IN</span><b>Natural-language request</b><code>“3 bed, 2 bath, open kitchen, home office, about 1,800 sq ft”</code></li>
-                <li><span className="bl-num">01</span><b>AI spatial planner</b><small>Interprets rooms, target sizes, adjacencies</small></li>
-                <li><span className="bl-num">02</span><b>Structured room requirements</b><code>{`{ id: "kitchen", type: "kitchen", target_sqft: 210, adjacent_to: ["dining","living"] }`}</code></li>
-                <li><span className="bl-num">03</span><b>Geometry solver</b><small>Places rooms, walls, doors and windows on a 0.5 ft grid</small></li>
-                <li className="bl-pipe-check"><span className="bl-num">04</span><b>Rule validator</b><small>Deterministic checks; failures return to the planner in plain English, up to 4 rounds</small></li>
-                <li><span className="bl-num">05</span><b>Shared layout model</b><code>{`{ footprint, entrance, rooms[], doors[], windows[], checks[] }`}</code></li>
-                <li className="bl-pipe-out"><span className="bl-num">OUT</span><b>2D floor plan + 3D walkthrough</b><small>Both rendered from the same JSON</small></li>
+        <section className="bl-solution bl-screen" id="solution" aria-labelledby="solution-title">
+          <Clouds dense />
+          <div className="bl-wrap bl-solution-grid">
+            <div className="bl-solution-copy" data-reveal>
+              <Kicker num="03">Our solution</Kicker>
+              <h2 id="solution-title">From description <em>to dimension.</em></h2>
+              <p className="bl-lede">BUILD pairs an AI planner with deterministic geometry. Language sets the intent; a solver and a rule checker make sure the plan actually works.</p>
+              <ol className="bl-how">
+                <li><span className="bl-num">1</span><div><b>Describe it</b>Plain English: rooms, size, what matters to you.</div></li>
+                <li><span className="bl-num">2</span><div><b>Get a plan that passes the rules</b>Exact walls, doors and windows, checked before you see them.</div></li>
+                <li><span className="bl-num">3</span><div><b>Walk through it, then refine</b>Explore in 3D at eye height and ask for changes.</div></li>
               </ol>
-            </div>
-
-            <div className="bl-tech-cols">
-              <dl className="bl-ideas" data-reveal>
-                <div><dt>AI planning</dt><dd>Claude reads the brief and produces a room program: room types, target areas, adjacency preferences and notes.</dd></div>
-                <div><dt>Deterministic geometry</dt><dd>A solver places rooms, walls, doors and windows with explicit geometric calculations, and picks the best of several hundred candidates.</dd></div>
-                <div><dt>Rule-based validation</dt><dd>A checker tests overlap, footprint fit, door placement, reachability from the entrance, minimum hall and door widths and room sizes.</dd></div>
-                <div><dt>Unified spatial representation</dt><dd>One layout JSON drives the plan, the 3D model, the walkthrough collision and the minimap.</dd></div>
-                <div><dt>Iterative refinement</dt><dd>Edits re-solve the program against the previous layout, so rooms you didn’t mention keep their size and place.</dd></div>
-              </dl>
-              <div className="bl-rules" data-reveal>
-                <p className="bl-rules-head"><span className="bl-num">{checks.filter((c) => c.pass).length}/{checks.length}</span> checks on the sample plan</p>
-                <ul>
-                  {checks.map((c) => <li key={c.rule}><span className="bl-check-dot" aria-hidden="true">✓</span>{RULE_LABELS[c.rule] ?? c.rule}<span className="bl-sr">: {c.pass ? "pass" : "fail"}</span></li>)}
-                </ul>
+              <div className="bl-proof">
+                <p><b>Plans breaking a layout rule</b><span>30 test prompts, same model, same checker</span></p>
+                <div className="bl-proof-row"><span>AI drawing geometry itself</span><i className="bl-proof-bar"><i style={{ width: "73.3%" }} className="is-raw" /></i><b className="bl-num">73.3%</b></div>
+                <div className="bl-proof-row"><span>BUILD</span><i className="bl-proof-bar"><i style={{ width: "1%" }} /></i><b className="bl-num">0%</b></div>
               </div>
             </div>
-
-            <div className="bl-bench" data-reveal>
-              <div className="bl-bench-head">
-                <h3>Raw model geometry vs. BUILD’s pipeline</h3>
-                <p>Share of generated plans that break at least one layout rule. 30 prompts, same model and same checker.</p>
-              </div>
-              <div className="bl-bars">
-                <div className="bl-bar"><span className="bl-bar-label">Claude drawing the geometry itself</span><span className="bl-bar-track"><span className="bl-bar-fill bl-bar-raw" style={{ width: "73.3%" }} /></span><span className="bl-num bl-bar-val">73.3%</span><span className="bl-bar-sub bl-num">mean 19.3 s</span></div>
-                <div className="bl-bar"><span className="bl-bar-label">Planner → solver → checker</span><span className="bl-bar-track"><span className="bl-bar-fill bl-bar-ok" style={{ width: "0.6%" }} /></span><span className="bl-num bl-bar-val">0.0%</span><span className="bl-bar-sub bl-num">mean 8.0 s</span></div>
-              </div>
-              <p className="bl-fine">Run 2026-11-08 with claude-opus-5-5 (effort low) on the 30 prompts in backend/eval/prompts.txt; results in docs/eval. Limits: a small prompt set, one model, and both arms are scored by BUILD’s own checker, which the pipeline is built to satisfy. A passing plan meets these supported rules only. It is not checked against building codes, structure, or construction feasibility.</p>
+            <div className="bl-panel" data-reveal>
+              <BuildSequence />
             </div>
           </div>
         </section>
 
-        {/* ---------------- PRODUCT ---------------- */}
-        <section className="bl-product" aria-labelledby="product-title">
-          <div className="bl-wrap">
-            <SectionHead id="product-title" num="04" kicker="The product" title={<>One workspace, <em>from prompt to walkthrough.</em></>}>
-              <p className="bl-lede">These are screens from the BUILD app, captured from the default brief. No mockups.</p>
-            </SectionHead>
-            <div data-reveal><Showcase /></div>
-          </div>
-        </section>
-
-        {/* ---------------- DEMO ---------------- */}
-        <section className="bl-demo" id="try" aria-labelledby="try-title">
-          <div className="bl-hero-grid" aria-hidden="true" />
-          <div className="bl-wrap bl-demo-inner">
-            <div className="bl-demo-copy" data-reveal>
-              <p className="bl-kicker"><span className="bl-num">05</span><span className="bl-kicker-dot" />Try it</p>
-              <h2 id="try-title">Your next home starts with an idea.</h2>
-              <p className="bl-lede">Describe a space, explore the resulting design, and refine it as you go.</p>
-              <div className="bl-actions">
-                <a className="bl-btn bl-btn-primary" href={APP_URL}>Open BUILD <Arrow /></a>
-                <a className="bl-btn bl-btn-ghost" href={GITHUB_URL} target="_blank" rel="noreferrer">
-                  <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg>
-                  View on GitHub
-                </a>
-              </div>
-            </div>
-            <a className="bl-demo-frame" href={APP_URL} data-reveal aria-label="Open BUILD">
-              <div className="bl-browser-bar" aria-hidden="true"><i /><i /><i /><span>BUILD</span></div>
-              <img src="/landing/app-result.webp" alt="The BUILD app with a generated house on the island and the design chat panel." width={1600} height={1000} loading="lazy" decoding="async" />
+        {/* ---------------- INTO THE DEMO ---------------- */}
+        <section className="bl-demo bl-screen" id="demo" aria-labelledby="demo-title">
+          <Clouds />
+          <div className="bl-demo-inner" data-reveal>
+            <h2 id="demo-title">Let’s build one.</h2>
+            <p className="bl-sub">Describe a home. We’ll plan it, check it, and walk through it.</p>
+            <a className="bl-prompt bl-prompt-lg" href={APP_URL} aria-label="Open the BUILD demo">
+              <span className="bl-prompt-text">Describe your home…</span>
+              <span className="bl-cta">Open the demo <Arrow /></span>
             </a>
+            <p className="bl-fine">BUILD is a design exploration tool. It doesn’t replace licensed architects or engineers, and its plans aren’t reviewed for codes, permits or structure.</p>
           </div>
-        </section>
-
-        {/* ---------------- CLOSING ---------------- */}
-        <section className="bl-close" aria-labelledby="close-title">
-          <div className="bl-wrap">
-            <div className="bl-close-plan" aria-hidden="true"><PlanDrawing layout={LAYOUT} title="" labels={false} dims={false} /></div>
-            <h2 id="close-title" data-reveal>See the space <em>before it becomes a place.</em></h2>
-            <div className="bl-actions bl-close-actions" data-reveal>
-              <a className="bl-btn bl-btn-primary bl-btn-lg" href={APP_URL}>Start designing <Arrow /></a>
-            </div>
-            <p className="bl-fine bl-close-note" data-reveal>BUILD is a tool for design exploration and visualization. It does not replace licensed architectural or engineering services, and its plans are not reviewed for building codes, permits or structure.</p>
-          </div>
+          <footer className="bl-footer">
+            <Logo size={18} />
+            <a href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>
+            <span>© 2026 BUILD</span>
+          </footer>
         </section>
       </main>
-
-      <footer className="bl-footer">
-        <div className="bl-wrap bl-footer-inner">
-          <div>
-            <Logo size={22} />
-            <p>Describe a home, get a rule-checked floor plan, and walk through it in 3D.</p>
-          </div>
-          <nav aria-label="Footer">
-            <a href={APP_URL}>Open BUILD</a>
-            <a href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>
-            <a href="#top">Back to top</a>
-          </nav>
-          <p className="bl-footer-copy"><Mark size={12} className="bl-footer-mark" /> © 2026 BUILD</p>
-        </div>
-      </footer>
     </div>
   );
 }

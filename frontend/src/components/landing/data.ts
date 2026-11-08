@@ -1,26 +1,15 @@
-// Content and geometry shared by the landing page. Every layout here is real solver output.
+// Content shared by the landing page. The layout is real solver output (shared sample).
 import sample from "@/lib/sample-layout.json";
-import edited from "./edit-kitchen-larger.json";
-import type { Layout, Room } from "@/lib/types";
+import type { Layout } from "@/lib/types";
 
-/** The bundled sample: backend solver output for the default brief, all checks passing. */
 export const LAYOUT = sample as Layout;
-/**
- * Same room program re-solved with the kitchen's target area raised from 210 to 284 sq ft,
- * keeping the previous layout (`solver.solve(program, keep=layout)`), then re-checked.
- * This is the geometric step BUILD runs after the planner turns "Make the kitchen larger"
- * into a program change. Generated offline from backend/walkthru (no LLM call).
- */
-export const EDITED_LAYOUT = edited as Layout;
+export const PROMPT = "3 bed, 2 bath, open kitchen, home office, about 1,800 sq ft";
 
-export const PROMPT = "Design a 1,800 sq ft home with three bedrooms, two bathrooms, an open kitchen, and a home office.";
-export const EDIT_PROMPT = "Make the kitchen larger.";
-
-// The real app lives at "/" in this Next app. Override for a separately deployed app.
-export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "/";
+// The app lives at /app in this Next app. Override for a separately deployed app.
+export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "/app";
 export const GITHUB_URL = "https://github.com/jimmxchen/BUILD";
 
-// Room fills from the Site model app (src/build/siteModelApp.js FLOOR), as CSS colors.
+// Room fills from the Site model app (src/build/siteModelApp.js FLOOR), as CSS colours.
 export const ROOM_FILL: Record<string, string> = {
   living: "#e7d8bd", kitchen: "#e2dfd7", dining: "#e6d4b6", bedroom: "#ecdfc8", primary_bedroom: "#e9d7ba",
   bathroom: "#d9e2e5", office: "#e0d1b6", laundry: "#dde1da", hall: "#f0e9db", entry: "#f0e9db", closet: "#e6e1d6",
@@ -38,49 +27,26 @@ export const RULE_LABELS: Record<string, string> = {
   sizes_within_10pct: "Every room within 10% of its target area",
 };
 
-export const ftIn = (ft: number) => {
-  const f = Math.floor(ft + 1e-6), i = Math.round((ft - f) * 12);
-  return i ? `${f}′${i}″` : `${f}′`;
-};
-export const area = (r: Room) => Math.round(r.w * r.h);
 export const totalArea = (l: Layout) => l.rooms.reduce((s, r) => s + r.w * r.h, 0);
 
-/** Rooms connected to `id` through a door or opening. */
-export function neighbours(l: Layout, id: string): Room[] {
-  const ids = new Set<string>();
-  for (const d of l.doors) if (d.between.includes(id)) d.between.forEach((b) => b !== id && b !== "exterior" && ids.add(b));
-  return l.rooms.filter((r) => ids.has(r.id));
-}
+const HOUZZ = "https://st.hzcdn.com/static/econ/2026_U.S._Houzz_and_Home_Study_RenovationTrends.pdf";
 
-export const STATS = {
-  feature: {
-    value: 37, suffix: "%",
-    label: "of U.S. homeowners who renovated in 2025 spent more than they planned.",
-    split: [
-      { label: "Over budget", value: 37 }, { label: "On budget", value: 35 },
-      { label: "Under budget", value: 3 }, { label: "No budget set", value: 25 },
-    ],
-    source: "2026 U.S. Houzz & Home Renovation Trends Study, p. 11. Online survey of 10,176 renovating homeowners on Houzz, fielded Jan–Mar 2026.",
-    href: "https://st.hzcdn.com/static/econ/2026_U.S._Houzz_and_Home_Study_RenovationTrends.pdf",
+/** Scale of the problem. Each figure checked against its original source on 2026-11-08. */
+export const SCALE = [
+  {
+    value: 939700, prefix: "", suffix: "", label: "new single-family homes started in the U.S. in 2025.",
+    source: "U.S. Census Bureau, New Residential Construction", href: "https://www.census.gov/construction/nrc/index.html",
   },
-  supporting: [
-    {
-      value: 31, prefix: "", suffix: "%",
-      label: "of those over budget cited a changed project scope or design.",
-      source: "Houzz & Home 2026, p. 11",
-      href: "https://st.hzcdn.com/static/econ/2026_U.S._Houzz_and_Home_Study_RenovationTrends.pdf",
-    },
-    {
-      value: 20000, prefix: "$", suffix: "",
-      label: "median renovation spend among U.S. homeowners in 2025, before any new home is designed.",
-      source: "Houzz & Home 2026, p. 5",
-      href: "https://st.hzcdn.com/static/econ/2026_U.S._Houzz_and_Home_Study_RenovationTrends.pdf",
-    },
-    {
-      value: 10.5, prefix: "", suffix: " mo",
-      label: "average from start of construction to completion for a contractor-built (custom) single-family home in 2025.",
-      source: "U.S. Census Bureau, Survey of Construction",
-      href: "https://www.census.gov/construction/nrc/data/time.html",
-    },
-  ],
-};
+  {
+    value: 518, prefix: "$", suffix: "B", label: "projected U.S. homeowner spending on improvements and repairs in 2026.",
+    source: "Harvard JCHS, Leading Indicator of Remodeling Activity (rev. Apr 2026)", href: "https://www.jchs.harvard.edu/press-releases/remodeling-growth-set-downshift-late-2026",
+  },
+  {
+    value: 91, prefix: "", suffix: "%", label: "of homeowners who renovated in 2025 hired at least one professional.",
+    source: "2026 U.S. Houzz & Home Study, p. 22", href: HOUZZ,
+  },
+  {
+    value: 37, prefix: "", suffix: "%", label: "of them spent more than they planned. 31% of those cited a changed scope or design.",
+    source: "2026 U.S. Houzz & Home Study, p. 11", href: HOUZZ,
+  },
+];

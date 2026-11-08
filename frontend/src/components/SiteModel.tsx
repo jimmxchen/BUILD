@@ -15,7 +15,7 @@ export default function SiteModel() {
       <canvas id="gl" aria-label="3D model of the house" />
 
       <div className="top">
-        <a href="/" id="logo" aria-label="build home" />
+        <a href="/app" id="logo" aria-label="build home" />
         <div className="s s-loading timer" id="timer">0.0 s</div>
         <button className="s s-result ghost" id="newBtn">New house</button>
       </div>
