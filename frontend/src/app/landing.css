@@ -268,3 +268,9 @@ html:has(.bl) { scroll-snap-type: y proximity; }
 }
 
 @media (max-height: 940px) and (min-width: 641px) { .bl-scrollcue { display: none; } }
+
+/* BUILD's live model in the comparison card */
+.bl-cmp-3d { position: absolute; inset: 0; background: linear-gradient(180deg, #eef3f7, var(--leaf-50)); }
+.bl-cmp-3d canvas { width: 100%; height: 100%; display: block; }
+.bl-cmp-replay { position: absolute; right: 10px; bottom: 10px; font: inherit; font-size: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, .9); border-radius: 999px; padding: 5px 11px; cursor: pointer; opacity: 0; transition: opacity .2s; }
+.bl-cmp-3d:hover .bl-cmp-replay, .bl-cmp-replay:focus-visible { opacity: 1; }

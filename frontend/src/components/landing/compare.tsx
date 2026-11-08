@@ -3,6 +3,8 @@
 // copied into public/compare) next to BUILD's own plan. Each card flips between its plan and its
 // 3D model; the 3D scenes and the walkthrough load only when asked, so the page stays light.
 import { useRef, useState, type ReactNode } from "react";
+import type { Layout } from "@/lib/types";
+import { BuildModel } from "./BuildModel";
 
 type View = "plan" | "3d";
 
@@ -37,17 +39,18 @@ function Scene({ src, poster, title }: { src: string; poster: string; title: str
   );
 }
 
-export function CompareCard({ tool, tag, mine = false, plan, model, note }: {
-  tool: string; tag: string; mine?: boolean; plan: ReactNode; model: ReactNode; note: string;
+export function CompareCard({ tool, tag, mine = false, plan, model, render, note, initial = "plan" }: {
+  tool: string; tag: string; mine?: boolean; plan?: ReactNode; model?: ReactNode;
+  render?: (view: View) => ReactNode; note: string; initial?: View;
 }) {
-  const [view, setView] = useState<View>("plan");
+  const [view, setView] = useState<View>(initial);
   return (
     <figure className={`bl-cmp-card ${mine ? "is-mine" : ""}`}>
       <header className="bl-cmp-head">
         <div><b>{tool}</b><span>{tag}</span></div>
         <Toggle view={view} setView={setView} label={tool} />
       </header>
-      <div className="bl-cmp-media" data-view={view}>{view === "plan" ? plan : model}</div>
+      <div className="bl-cmp-media" data-view={view}>{render ? render(view) : view === "plan" ? plan : model}</div>
       <figcaption className="bl-cmp-note">{note}</figcaption>
     </figure>
   );
@@ -70,9 +73,9 @@ export function ClaudeCard() {
     <CompareCard
       tool="Claude" tag="General chatbot"
       // eslint-disable-next-line @next/next/no-img-element
-      plan={<img src="/compare/claude_house_plan_view.png" alt="Claude's floor plan: 60 by 30 feet" />}
-      model={<Scene src="/compare/claude-house.html" poster="/compare/claude_house_elevated_view.png" title="Claude's 3D scene" />}
-      note="A furnished 60 × 30 ft model with room sizes labeled. Also a one-off concept: nothing checks whether the layout works."
+      plan={<img src="/compare/claude-plan-simple.jpg" alt="Claude's floor plan: 60 by 30 feet" />}
+      model={<Scene src="/compare/claude-house.html" poster="/compare/claude-3d-simple.jpg" title="Claude's 3D scene" />}
+      note="A furnished 60 × 30 ft model. Also a one-off concept: nothing checks whether the layout works."
     />
   );
 }
@@ -87,5 +90,16 @@ export function WalkthroughEmbed() {
       <img src="/walkthrough/poster.jpg" alt="" />
       <span className="bl-cmp-play">Step inside</span>
     </button>
+  );
+}
+
+/** BUILD: the app engine building the solved layout, furniture and all; one model for both views. */
+export function BuildCard({ layout, sqft }: { layout: Layout; sqft: number }) {
+  return (
+    <CompareCard
+      tool="BUILD" tag="Our platform" mine initial="3d"
+      render={(view) => <BuildModel layout={layout} view={view} label={`BUILD's ${view === "plan" ? "floor plan" : "3D model"} of the brief, ${sqft.toLocaleString()} square feet, furnished`} />}
+      note={`${sqft.toLocaleString()} sq ft. The same solved layout becomes the plan, the furnished 3D model and the walkthrough, and it passes every layout rule.`}
+    />
   );
 }

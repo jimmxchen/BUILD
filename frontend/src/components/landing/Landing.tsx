@@ -4,7 +4,7 @@
 import { IsoHouse } from "./IsoHouse";
 import { Logo } from "./Logo";
 import { BuildSequence, CountUp, RevealObserver, SectionDots } from "./interactive";
-import { ChatGPTCard, ClaudeCard, CompareCard, WalkthroughEmbed } from "./compare";
+import { BuildCard, ChatGPTCard, ClaudeCard, WalkthroughEmbed } from "./compare";
 import { APP_URL, GITHUB_URL, LAYOUT, PROMPT, SCALE, totalArea } from "./data";
 
 const SECTIONS = [
@@ -148,12 +148,7 @@ export default function Landing() {
             <div className="bl-cmp-grid" data-reveal>
               <ChatGPTCard />
               <ClaudeCard />
-              <CompareCard
-                tool="BUILD" tag="Our platform" mine
-                plan={<div className="bl-cmp-iso is-plan"><IsoHouse layout={LAYOUT} title={`BUILD's floor plan, ${sqft.toLocaleString()} square feet`} /></div>}
-                model={<div className="bl-cmp-iso"><IsoHouse layout={LAYOUT} title={`BUILD's 3D model of the same plan, ${sqft.toLocaleString()} square feet`} /></div>}
-                note={`${sqft.toLocaleString()} sq ft. The same solved layout becomes the plan, the 3D model and the walkthrough, and it passes every layout rule.`}
-              />
+              <BuildCard layout={LAYOUT} sqft={sqft} />
             </div>
             <div className="bl-cmp-tablewrap" data-reveal>
               <table className="bl-cmp-table">
