@@ -7,8 +7,11 @@
 // environment or in design-mockups/.env.local (git-ignored). Optional GEMINI_IMAGE_MODEL.
 // No dependencies (Node 18+).
 import { createServer } from "node:http";
-import { readFile, stat } from "node:fs/promises";
-import { readFileSync } from "node:fs";
+import { readFile, stat, writeFile, mkdir, readdir, rm } from "node:fs/promises";
+import { readFileSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { extname, join, normalize, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -29,6 +32,13 @@ const MODEL = process.env.GEMINI_IMAGE_MODEL || "gemini-nano-banana-2.1";
 // Cheaper/faster model for the extra coverage views (sides, back).
 const LITE_MODEL = process.env.GEMINI_IMAGE_MODEL_LITE || "gemini-3.1-flash-lite-image";
 const MODELS = { main: MODEL, lite: LITE_MODEL };
+// Seamless 360: Gemini Omni (video) fills the gap between each pair of neighboring photos.
+// Billed per second of output video (~$0.10/s at 720p), so: short clips, one pass, cached on disk.
+const OMNI_MODEL = process.env.GEMINI_VIDEO_MODEL || "gemini-omni-1.1-flash";
+const OMNI_RES = process.env.SPIN_RESOLUTION || "720p";
+// 3 s clips often stop short of the last frame; 5 s reliably reach it (10 s also cut more often).
+const SPIN_SECONDS = Number(process.env.SPIN_SECONDS || 5);
+const run = promisify(execFile);
 
 const TYPES = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8",
@@ -137,6 +147,170 @@ async function nominatimFallback(lat, lon, headers) {
   return { elements, source: "nominatim" };
 }
 
+
+// ---------------------------------------------------------------------------------------------
+// POST /api/spin { frames: [N data URLs, in ring order], prompt? } -> { id, status }
+// GET  /api/spin/<id> -> { status: running|done|error, done, total, n, error }
+// Frames: /renders/spin/<id>/f_0001.jpg ... f_<n>.jpg, evenly spaced around the house.
+// Clip k interpolates frame k -> frame k+1 (last wraps to 0). Each clip is re-timed so the camera
+// moves at an even speed (models ease in/out at the ends, which would read as a stutter at every
+// photo), its last frame is dropped (it is the next clip's first), and all clips are joined.
+// Same photos -> same id -> served from disk, never paid for twice.
+const SPIN_DIR = join(ROOT, "renders", "spin");
+const spinJobs = new Map();
+const PER_CLIP = 72; // output frames per clip after re-timing (3 s at 24 fps)
+
+async function startSpin(req, res) {
+  if (!KEY) return send(res, 503, { error: "No GEMINI_API_KEY" });
+  const { frames, prompt = "" } = await readBody(req, 40 * 1024 * 1024);
+  const ok = Array.isArray(frames) && frames.length >= 3 && frames.length <= 16 &&
+    frames.every((f) => typeof f === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(f));
+  if (!ok || typeof prompt !== "string" || prompt.length > 3000) return send(res, 400, { error: "Expected { frames: 3-16 data URLs, prompt? }" });
+  const id = createHash("sha1").update(JSON.stringify([frames, prompt, OMNI_RES, OMNI_MODEL])).digest("hex").slice(0, 16);
+  const dir = join(SPIN_DIR, id);
+  if (existsSync(join(dir, "done.json"))) return send(res, 200, { id, ...JSON.parse(readFileSync(join(dir, "done.json"), "utf8")), status: "done" });
+  if (!spinJobs.has(id) || spinJobs.get(id).status === "error") {
+    const job = { status: "running", done: 0, total: frames.length, n: 0, error: null };
+    spinJobs.set(id, job);
+    buildSpin(id, dir, frames, prompt, job).catch((e) => { job.status = "error"; job.error = String(e.message || e); console.error("spin", id, e); });
+  }
+  send(res, 200, { id, ...spinJobs.get(id) });
+}
+
+function spinStatus(res, id) {
+  if (!/^[0-9a-f]{16}$/.test(id)) return send(res, 400, { error: "bad id" });
+  const doneFile = join(SPIN_DIR, id, "done.json");
+  if (existsSync(doneFile)) return send(res, 200, { id, ...JSON.parse(readFileSync(doneFile, "utf8")), status: "done" });
+  const job = spinJobs.get(id);
+  send(res, job ? 200 : 404, job ? { id, ...job } : { error: "unknown spin" });
+}
+
+async function omniClip(first, last, prompt) {
+  const part = (u) => { const m = u.match(/^data:(image\/\w+);base64,(.+)$/); return { type: "image", mime_type: m[1], data: m[2] }; };
+  const body = {
+    model: OMNI_MODEL,
+    input: [part(first), part(last), { type: "text", text: prompt }],
+    response_format: { type: "video", resolution: OMNI_RES, aspect_ratio: "16:9" },
+  };
+  let lastErr;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+      method: "POST", headers: { "x-goog-api-key": KEY, "Content-Type": "application/json" }, body: JSON.stringify(body),
+      signal: AbortSignal.timeout(300000),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const msg = (Array.isArray(d) ? d[0] : d)?.error?.message || `Omni HTTP ${r.status}`;
+      lastErr = new Error(r.status === 402 ? "Gemini prepaid credits are used up: top up in AI Studio" : msg);
+      if (r.status < 500 && r.status !== 429) break; // 4xx won't fix itself: don't pay for a retry
+      continue;
+    }
+    const vid = [d.output_video, ...(d.steps ?? []).flatMap((s) => s.content ?? [])].find((c) => c?.data && /video/.test(c.mime_type ?? "video"));
+    if (vid) { console.log(`omni: ${d.usage?.total_output_tokens ?? "?"} output tokens`); return Buffer.from(vid.data, "base64"); }
+    lastErr = new Error("Omni returned no video");
+  }
+  throw lastErr;
+}
+
+async function sceneScores(file) {
+  const { stderr } = await run("ffmpeg", ["-hide_banner", "-i", file, "-vf", "scale=192:-1,select='gte(scene,0)',metadata=print", "-an", "-f", "null", "-"], { maxBuffer: 1 << 24 });
+  return [...stderr.matchAll(/lavfi\.scene_score=([\d.]+)/g)].map((m) => Number(m[1]));
+}
+/** Largest single-frame change if it looks like a cut (a camera move spreads change over many frames). */
+async function hardCut(file) {
+  const v = await sceneScores(file);
+  const m = Math.max(...v.slice(1));
+  return m > 0.12 ? m : 0;
+}
+/** SSIM of the clip's last frame vs the photo it should end on (1 = same view). */
+async function endMatch(file, anchor, dir) {
+  const last = join(dir, "_last.png"), want = join(dir, "_want.img");
+  await writeFile(want, Buffer.from(anchor.split(",")[1], "base64"));
+  await run("ffmpeg", ["-loglevel", "error", "-y", "-sseof", "-0.1", "-i", file, "-frames:v", "1", "-update", "1", last]);
+  const { stderr } = await run("ffmpeg", ["-hide_banner", "-i", last, "-i", want, "-lavfi", "[0]scale=320:180[x];[1]scale=320:180[y];[x][y]ssim", "-f", "null", "-"]);
+  await rm(last, { force: true }); await rm(want, { force: true });
+  return Number(stderr.match(/All:([\d.]+)/)?.[1] ?? 0);
+}
+
+/** Fallback segment: cross-fade the two photos (the old behavior, for this gap only). */
+async function blendClip(a, b, out, dir, k) {
+  const save = async (u, name) => { const p = join(dir, name); await writeFile(p, Buffer.from(u.split(",")[1], "base64")); return p; };
+  const pa = await save(a, `anchor_${k}_a.img`), pb = await save(b, `anchor_${k}_b.img`);
+  await run("ffmpeg", ["-loglevel", "error", "-y", "-loop", "1", "-t", "3", "-i", pa, "-loop", "1", "-t", "3", "-i", pb,
+    "-filter_complex", "[0]scale=1280:720,setsar=1,fps=24[x];[1]scale=1280:720,setsar=1,fps=24[y];[x][y]xfade=transition=fade:duration=2.9:offset=0.05,format=yuv420p",
+    "-t", "3", out]);
+  console.log(`spin clip ${k}: blended fallback`);
+}
+
+/** Per-frame motion (ffmpeg scene score) -> indices of PER_CLIP frames at even motion steps. */
+async function evenSpeedIndices(file, count) {
+  const raw = await sceneScores(file);
+  // scores flicker frame to frame (codec), so smooth over ~1/3 s: we want the slow speed curve
+  const scores = raw.map((_, j) => { let a = 0, c = 0; for (let k = Math.max(1, j - 4); k <= Math.min(raw.length - 1, j + 4); k++) { a += raw[k]; c++; } return c ? a / c : 0; });
+  const n = Math.min(count, scores.length + 1);
+  const cum = [0];
+  for (let j = 1; j < n; j++) cum.push(cum[j - 1] + Math.max(scores[j] ?? 0, 1e-4)); // scores[j]: change from frame j-1 to j
+  const total = cum[n - 1];
+  const out = [];
+  for (let t = 0; t < PER_CLIP; t++) { // t / PER_CLIP of the way: the clip's last frame belongs to the next clip
+    const want = (t / PER_CLIP) * total;
+    let j = 0; while (j < n - 1 && cum[j + 1] <= want) j++;
+    out.push(j + 1 < n && want - cum[j] > cum[j + 1] - want ? j + 1 : j);
+  }
+  return out;
+}
+
+async function buildSpin(id, dir, frames, prompt, job) {
+  await mkdir(dir, { recursive: true });
+  const text = `A single continuous ${SPIN_SECONDS}-second drone shot with no cuts. The video is ${SPIN_SECONDS} seconds long. ` +
+    "The first image is the FIRST frame and the second image is the LAST frame of this one continuous shot. " +
+    "The camera orbits around the house at a constant speed, at the same height and distance the whole time, moving smoothly from the first view to the last view. " +
+    "The house, yard, trees, sky and lighting stay exactly the same: a still afternoon, nothing moves except the camera. " +
+    "The camera keeps moving the whole time and ends EXACTLY on the last image's view: never holds still, never jumps, never cuts to the last view. " +
+    "No cuts, no zoom, no morphing, no people, no cars, no text." + (prompt ? ` ${prompt}` : "");
+  const N = frames.length;
+  const clips = new Array(N);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(N, 8) }, async () => {
+    while (next < N) {
+      const k = next++;
+      const f = join(dir, `clip_${String(k).padStart(2, "0")}.mp4`);
+      if (!existsSync(f)) {
+        // The model sometimes holds the first view and then hard-cuts to the last one. That is
+        // exactly the jump we are trying to remove: retry once, then fall back to a soft blend.
+        for (let attempt = 0; attempt < 2 && !existsSync(f); attempt++) {
+          const tmpClip = `${f}.try${attempt}.mp4`;
+          await writeFile(tmpClip, await omniClip(frames[k], frames[(k + 1) % N], text));
+          const cut = await hardCut(tmpClip);
+          const end = cut ? 0 : await endMatch(tmpClip, frames[(k + 1) % N], dir);
+          const good = !cut && end >= 0.7;
+          console.log(`spin ${id} clip ${k}: ${cut ? `hard cut (${cut.toFixed(2)})` : `continuous, end match ${end.toFixed(2)}`}${good ? "" : " -> rejected"}`);
+          if (good) await run("mv", [tmpClip, f]); else await rm(tmpClip);
+        }
+        if (!existsSync(f)) await blendClip(frames[k], frames[(k + 1) % N], f, dir, k);
+      }
+      clips[k] = f; job.done++;
+    }
+  }));
+  // Re-time and join: frame files numbered around the whole ring.
+  const tmp = join(dir, "tmp"); await mkdir(tmp, { recursive: true });
+  let g = 0;
+  for (const f of clips) {
+    await rm(tmp, { recursive: true, force: true }); await mkdir(tmp);
+    await run("ffmpeg", ["-loglevel", "error", "-i", f, "-vf", "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720", "-q:v", "6", join(tmp, "s_%04d.jpg")]);
+    const src = (await readdir(tmp)).filter((x) => x.endsWith(".jpg")).sort();
+    for (const j of await evenSpeedIndices(f, src.length)) {
+      g++;
+      await writeFile(join(dir, `f_${String(g).padStart(4, "0")}.jpg`), await readFile(join(tmp, src[j])));
+    }
+  }
+  await rm(tmp, { recursive: true, force: true });
+  const meta = { n: g, total: N, done: N, clips: N, resolution: OMNI_RES };
+  await writeFile(join(dir, "done.json"), JSON.stringify(meta));
+  Object.assign(job, meta, { status: "done" });
+  console.log(`spin ${id}: ${N} clips -> ${g} frames`);
+}
+
 function send(res, code, obj) {
   res.writeHead(code, { "Content-Type": "application/json" });
   res.end(JSON.stringify(obj));
@@ -147,7 +321,9 @@ createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
     if (url.pathname === "/api/render" && req.method === "POST") return await render(req, res);
     if (url.pathname === "/api/osm") return await osm(req, res, url);
-    if (url.pathname === "/api/render/status") return send(res, 200, { ready: Boolean(KEY), model: MODEL, lite: LITE_MODEL });
+    if (url.pathname === "/api/spin" && req.method === "POST") return await startSpin(req, res);
+    if (url.pathname.startsWith("/api/spin/")) return spinStatus(res, url.pathname.slice(10));
+    if (url.pathname === "/api/render/status") return send(res, 200, { ready: Boolean(KEY), model: MODEL, lite: LITE_MODEL, video: OMNI_MODEL });
     let path = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, "");
     if (path.endsWith("/")) path += "index.html";
     const file = join(ROOT, path);
