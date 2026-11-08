@@ -8,6 +8,7 @@ import { enhanceRenderer, fitSun, createComposer } from "./render.js";
 import { createFurnitureDrag } from "./interact.js";
 import { addSiteButton } from "./site.js";
 import { addPhotorealButton } from "./photoreal.js";
+import { addExportButton } from "@/lib/export/button";
 import { createFloatingIsland, createCloudSea, attachParallax, createMist, cameraDive, createMiniStage, roomDiorama } from "./atmosphere.js";
 
 
@@ -802,6 +803,7 @@ const shownIds = () => tiles.filter((t) => !t.hidden).map((t) => t.dataset.id);
 // Site view: "On site" button next to Walk through (Google 3D tiles; see core/site.js).
 addSiteButton($("#walkBtn"), () => layout);
 const photoreal = addPhotorealButton($("#walkBtn"), () => ({ layout: layout, furniture: furn, busy: editing }))?.photoreal; // busy: don't export a half-furnished house // Blender Cycles 360° tour, renders automatically
+addExportButton($("#walkBtn"), () => layout); // CAD (.dxf) + PDF plan sheet downloads (src/lib/export)
 // ---------- design chat: an iterative loop with the agent (POST /api/chat; local fallback) ----------
 const convo = []; // the whole conversation, from the first brief through every refinement
 let chatBusy = false;

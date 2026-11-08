@@ -285,6 +285,6 @@ body.planmode #tags, body.planmode #dimTags, body.planmode .draghint { display: 
 .panel #editMsg { display: none; }
 .chathead .lede { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .chathead h2 { font-size: 19px; }
-.panel .foot { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 14px 14px; }
+.panel .foot { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 12px 14px 14px; }
 .panel .foot #walkBtn { grid-column: 1 / -1; padding: 12px; }
 .panel .foot .walkbtn:not(#walkBtn) { grid-column: auto; padding: 9px 10px; font-size: 13.5px; border-radius: 10px; margin: 0 !important; }
