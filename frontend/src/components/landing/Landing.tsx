@@ -28,10 +28,6 @@ function Clouds({ dense = false }: { dense?: boolean }) {
   );
 }
 
-function Kicker({ num, children }: { num: string; children: React.ReactNode }) {
-  return <p className="bl-kicker"><span className="bl-num">{num}</span><span className="bl-kicker-dot" />{children}</p>;
-}
-
 export default function Landing() {
   const sqft = Math.round(totalArea(LAYOUT));
   return (
@@ -55,7 +51,7 @@ export default function Landing() {
             <h1 id="hero-title">Design your home.<br /><span>Step inside before it’s built.</span></h1>
             <p className="bl-sub">BUILD turns a sentence into a rule-checked floor plan and a 3D home you can walk through.</p>
             <a className="bl-prompt" href={APP_URL} aria-label={`Open the BUILD demo. Example brief: ${PROMPT}`}>
-              <span className="bl-prompt-text">{PROMPT}<i className="bl-caret" aria-hidden="true" /></span>
+              <span className="bl-prompt-text">{PROMPT}</span>
               <span className="bl-cta">Build it</span>
             </a>
           </div>
@@ -66,21 +62,17 @@ export default function Landing() {
         <section className="bl-problem bl-screen" id="problem" aria-labelledby="problem-title">
           <div className="bl-wrap bl-problem-grid">
             <div data-reveal>
-              <Kicker num="01">The problem</Kicker>
               <h2 id="problem-title">Design decisions are expensive. <em>Understanding them shouldn’t be.</em></h2>
               <p className="bl-lede">Homeowners commit to layouts they’ve only seen as drawings. By the time a space can be experienced, changing it is slow and costly.</p>
             </div>
             <ul className="bl-fails" aria-label="Where residential design breaks down">
               <li className="bl-fail" data-reveal>
-                <span className="ic" aria-hidden="true">!</span>
                 <div><b>High barriers to entry</b><span>A workable floor plan takes professional help, specialist software, and several rounds of revision.</span></div>
               </li>
               <li className="bl-fail" data-reveal>
-                <span className="ic" aria-hidden="true">!</span>
                 <div><b>Hard to picture</b><span>A drawing fixes dimensions, not experience. A hall that looks fine on paper can feel tight at eye level.</span></div>
               </li>
               <li className="bl-fail" data-reveal>
-                <span className="ic" aria-hidden="true">!</span>
                 <div><b>Costly to change</b><span>Move one wall and the doors, rooms and circulation around it move too.</span></div>
               </li>
             </ul>
@@ -91,7 +83,6 @@ export default function Landing() {
         <section className="bl-scale bl-screen" id="scale" aria-labelledby="scale-title">
           <div className="bl-wrap">
             <div data-reveal>
-              <Kicker num="02">Who needs this</Kicker>
               <h2 id="scale-title">This isn’t a niche problem.</h2>
             </div>
             <ul className="bl-stats">
@@ -112,7 +103,6 @@ export default function Landing() {
           <Clouds dense />
           <div className="bl-wrap bl-solution-grid">
             <div className="bl-solution-copy" data-reveal>
-              <Kicker num="03">Our solution</Kicker>
               <h2 id="solution-title">From description <em>to dimension.</em></h2>
               <p className="bl-lede">BUILD pairs an AI planner with deterministic geometry. Language sets the intent; a solver and a rule checker make sure the plan actually works.</p>
               <ol className="bl-how">
@@ -142,7 +132,6 @@ export default function Landing() {
               <span className="bl-prompt-text">Describe your home…</span>
               <span className="bl-cta">Open the demo <Arrow /></span>
             </a>
-            <p className="bl-fine">BUILD is a design exploration tool. It doesn’t replace licensed architects or engineers, and its plans aren’t reviewed for codes, permits or structure.</p>
           </div>
           <footer className="bl-footer">
             <Logo size={18} />
