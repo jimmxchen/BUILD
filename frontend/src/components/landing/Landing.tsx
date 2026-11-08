@@ -4,7 +4,7 @@
 import { IsoHouse } from "./IsoHouse";
 import { Logo } from "./Logo";
 import { BuildSequence, CountUp, RevealObserver, SectionDots } from "./interactive";
-import { BuildCard, ChatGPTCard, ClaudeCard, WalkthroughEmbed } from "./compare";
+import { BuildCard, ChatGPTCard, ClaudeCard } from "./compare";
 import { APP_URL, GITHUB_URL, LAYOUT, PROMPT, SCALE, totalArea } from "./data";
 
 const SECTIONS = [
@@ -13,7 +13,6 @@ const SECTIONS = [
   { id: "scale", label: "Who needs it" },
   { id: "solution", label: "Our solution" },
   { id: "compare", label: "vs. ChatGPT & Claude" },
-  { id: "walk", label: "Walk through it" },
   { id: "demo", label: "Demo" },
 ];
 
@@ -165,24 +164,6 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* ---------------- WALK THROUGH IT ---------------- */}
-        <section className="bl-walk bl-screen" id="walk" aria-labelledby="walk-title">
-          <div className="bl-wrap bl-walk-grid">
-            <div className="bl-walk-copy" data-reveal>
-              <h2 id="walk-title">Don’t look at it. <em>Walk through it.</em></h2>
-              <p className="bl-lede">A chatbot hands you a dollhouse to spin. BUILD puts you inside, at eye height, in light that behaves like light.</p>
-              <ol className="bl-how">
-                <li><span className="bl-num">1</span><div><b>Eye level, not bird’s-eye</b>Stand in the doorway and see whether the hall feels tight before anyone builds it.</div></li>
-                <li><span className="bl-num">2</span><div><b>Photoreal, path-traced</b>Every view is rendered in Blender Cycles with real sky light, materials and furniture.</div></li>
-                <li><span className="bl-num">3</span><div><b>Room to room, like Street View</b>Click the floor arrows or the map to walk from the living room to the bedrooms.</div></li>
-              </ol>
-            </div>
-            <div className="bl-walk-view" data-reveal>
-              <WalkthroughEmbed />
-              <p className="bl-walk-cap">Drag to look around · click the floor arrows to walk</p>
-            </div>
-          </div>
-        </section>
 
         {/* ---------------- INTO THE DEMO ---------------- */}
         <section className="bl-demo bl-screen" id="demo" aria-labelledby="demo-title">
