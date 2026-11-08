@@ -2,7 +2,7 @@
 
 **Describe a home. Get a floor plan you can inspect, edit, and walk through.**
 
-Walkthru turns a plain-language housing brief into a rule-checked layout and an interactive 3D walkthrough. It is built for people who have ideas for a home but need a quick way to see whether those ideas fit together before taking them to a designer or architect.
+Build turns a plain-language housing brief into a rule-checked layout and an interactive 3D walkthrough. It is built for people who have ideas for a home but need a quick way to see whether those ideas fit together before taking them to a designer or architect.
 
 ## The problem
 
