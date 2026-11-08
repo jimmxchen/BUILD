@@ -65,14 +65,14 @@ export default function Landing() {
               <h2 id="problem-title">Design decisions are expensive. <em>Understanding them shouldn’t be.</em></h2>
               <p className="bl-lede">Homeowners commit to layouts they’ve only seen as drawings. By the time a space can be experienced, changing it is slow and costly.</p>
             </div>
-            <ul className="bl-fails" aria-label="Where residential design breaks down">
-              <li className="bl-fail" data-reveal>
+            <ul className="bl-fails" aria-label="Where residential design breaks down" data-reveal>
+              <li className="bl-fail">
                 <div><b>High barriers to entry</b><span>A workable floor plan takes professional help, specialist software, and several rounds of revision.</span></div>
               </li>
-              <li className="bl-fail" data-reveal>
+              <li className="bl-fail">
                 <div><b>Hard to picture</b><span>A drawing fixes dimensions, not experience. A hall that looks fine on paper can feel tight at eye level.</span></div>
               </li>
-              <li className="bl-fail" data-reveal>
+              <li className="bl-fail">
                 <div><b>Costly to change</b><span>Move one wall and the doors, rooms and circulation around it move too.</span></div>
               </li>
             </ul>
