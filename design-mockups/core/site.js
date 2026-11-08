@@ -446,11 +446,13 @@ export async function openSiteView(layout) {
       if (token !== shotToken || disposed) return;
       if (job.status !== "done") throw new Error(job.error || "video failed");
       seamStat("Loading the seamless spin…");
-      const base = `renders/spin/${job.id}/f_`;
+      const base = `/renders/spin/${job.id}/f_`; // absolute: the page lives in a subfolder
       const frames = Array.from({ length: job.n }, (_, i) => { const im = new Image(); im.decoding = "async"; im.src = `${base}${String(i + 1).padStart(4, "0")}.jpg`; return im; });
       // decode everything before switching, so the first drag never hits a blank frame
       let ready = 0;
-      await Promise.all(frames.map((im) => im.decode().catch(() => {}).then(() => { ready++; if (ready % 40 === 0) seamStat(`Loading the seamless spin… ${Math.round((ready / frames.length) * 100)}%`); })));
+      let failed = 0;
+      await Promise.all(frames.map((im) => im.decode().catch(() => { failed++; }).then(() => { ready++; if (ready % 40 === 0) seamStat(`Loading the seamless spin… ${Math.round((ready / frames.length) * 100)}%`); })));
+      if (failed) throw new Error(`${failed} of ${frames.length} frames did not load`); // never switch to a black spin
       if (token !== shotToken || disposed) return;
       seq = { frames, n: frames.length };
       seamStat("");
