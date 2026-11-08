@@ -21,7 +21,7 @@ import { BRAND } from "./core.js";
 import { STYLES, defaultExterior, buildExteriorHouse, parseExteriorPrompt } from "./exterior.js";
 import { ProjectionSkin } from "./projskin.js";
 import { neighborhoodOrientation, houseRotation } from "./orient.js";
-import { encodeGuide, filmOrbit, downloadOrbit, ringFrames, release } from "./orbitvideo.js";
+import { ORBIT, encodeGuides, filmOrbit, downloadOrbit, joinRing, release } from "./orbitvideo.js";
 
 const TILES_VERSION = "0.5.4";
 const TILES_CDN = `https://cdn.jsdelivr.net/npm/3d-tiles-renderer@${TILES_VERSION}/build`;
@@ -441,18 +441,22 @@ export async function openSiteView(layout) {
     if (!shotUrls[0]) { seamStat(""); return; }
     const live = () => token === shotToken && !disposed;
     try {
-      // one clip for the whole turn: our 3D model wearing the photos (projection skin) orbits once,
-      // the browser encodes that as a guide video, and Gemini Omni repaints it photoreal (see orbitvideo.js)
+      // our 3D model wearing the photos (projection skin) orbits once; the browser encodes that as
+      // a guide video, Gemini Omni repaints it photoreal, and the clip becomes a looping frame ring
+      // (see orbitvideo.js; ORBIT.PARTS > 1 films arcs in parallel, but their joins don't line up)
       seamStat("Filming the 360° orbit…");
       const t0 = performance.now();
-      const guide = await encodeGuide((each) => orbitFrames(240, each), { width: 960, height: 540 });
+      const guides = await encodeGuides((each) => orbitFrames(ORBIT.TOTAL, each), { width: 960, height: 540 });
       if (!live()) return;
-      const job = await filmOrbit(guide);
+      const seconds = (ORBIT.SEG + ORBIT.OVERLAP) / ORBIT.FPS;
+      let filmed = 0;
+      const clips = await Promise.all(guides.map(async (g) => {
+        const clip = await downloadOrbit(await filmOrbit(g, { seconds }));
+        if (live() && guides.length > 1) seamStat(`Filming the 360° orbit… ${++filmed}/${guides.length}`);
+        return clip;
+      }));
       if (!live()) return;
-      seamStat("Loading the seamless spin…");
-      const clip = await downloadOrbit(job);
-      if (!live()) return;
-      const frames = await ringFrames(clip, { onProgress: (f) => live() && seamStat(`Loading the seamless spin… ${Math.round(f * 100)}%`) });
+      const frames = await joinRing(clips, { onProgress: (f) => live() && seamStat(`Loading the seamless spin… ${Math.round(f * 100)}%`) });
       if (!live()) { release(frames); return; }
       seq = { frames, n: frames.length };
       console.log(`seamless spin: ${frames.length} frames in ${Math.round((performance.now() - t0) / 1000)} s`);

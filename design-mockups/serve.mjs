@@ -266,10 +266,10 @@ async function evenSpeedIndices(file, count) {
 // the 3D model wearing the photos orbiting once, encodes it as a small guide mp4 (core/orbitvideo.js),
 // and posts it here. Omni repaints it photoreal at ORBIT_RES and leaves the clip as a Gemini file;
 // the browser pulls it back in slices through /api/orbit/video and splits it into frames itself.
-const ORBIT_PROMPT = "Restyle this 10-second 3D architectural animation as a photorealistic architectural visualization of the same house. " +
-  "Keep the camera motion exactly as in the video: one smooth orbit all the way around the house at constant speed, same height and distance, ending where it started. " +
+const orbitPrompt = (seconds) => `Restyle this ${seconds}-second 3D architectural animation as a photorealistic architectural visualization of the same house. The video is ${seconds} seconds long. ` +
+  "Keep the camera motion exactly as in the video: the same smooth, constant-speed arc around the house, same height and distance, starting and ending on the same views as the video. " +
   "Keep the house shape, size and position in the frame exactly as in the video. " +
-  "Keep the house's siding, trim, roof, windows, doors and colors as shown, made photorealistic. Add a real green lawn, mature trees and softly out-of-focus neighboring houses, consistent all the way round, in late-afternoon light. " +
+  "Keep the house's siding, trim, roof, windows, doors and colors as shown, made photorealistic. Add a real green lawn, mature trees and softly out-of-focus neighboring houses in late-afternoon light. " +
   "High detail and sharp focus on the house: crisp siding lines, trim, window frames and glass reflections, clean roof edges, true straight walls; stable, no flicker or shimmer. " +
   "Replace the plain gray backdrop and ground with that real yard and neighborhood. Nothing moves except the camera. No cuts, no zoom, no morphing, no people, no cars, no text.";
 const GEMINI = "https://generativelanguage.googleapis.com/v1beta";
@@ -277,12 +277,12 @@ const GEMINI = "https://generativelanguage.googleapis.com/v1beta";
 async function orbit(req, res) {
   if (!KEY) return send(res, 503, { error: "No GEMINI_API_KEY" });
   const t0 = Date.now();
-  const { video } = await readBody(req, 6 * 1024 * 1024);
+  const { video, seconds = 10 } = await readBody(req, 6 * 1024 * 1024);
   const m = typeof video === "string" && video.match(/^data:video\/mp4;base64,(.+)$/);
-  if (!m || m[1].length > 5.5e6) return send(res, 400, { error: "Expected { video: mp4 data URL under 4 MB }" });
+  if (!m || m[1].length > 5.5e6 || !Number.isInteger(seconds) || seconds < 3 || seconds > 10) return send(res, 400, { error: "Expected { video: mp4 data URL under 4 MB, seconds: 3-10 }" });
   const r = await fetch(`${GEMINI}/interactions`, {
     method: "POST", headers: { "x-goog-api-key": KEY, "Content-Type": "application/json" }, signal: AbortSignal.timeout(280000),
-    body: JSON.stringify({ model: OMNI_MODEL, input: [{ type: "video", mime_type: "video/mp4", data: m[1] }, { type: "text", text: ORBIT_PROMPT }],
+    body: JSON.stringify({ model: OMNI_MODEL, input: [{ type: "video", mime_type: "video/mp4", data: m[1] }, { type: "text", text: orbitPrompt(seconds) }],
       response_format: { type: "video", resolution: ORBIT_RES, aspect_ratio: "16:9", delivery: "uri" } }),
   });
   const d = await r.json().catch(() => ({}));
