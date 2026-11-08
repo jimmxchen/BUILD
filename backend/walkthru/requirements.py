@@ -41,9 +41,11 @@ class Requirements:
     half_baths: Optional[int] = None
     offices_min: Optional[int] = None
     sqft: Optional[float] = None
+    workrooms_min: Optional[int] = None
+    courts_min: Optional[int] = None
 
     def is_empty(self) -> bool:
-        return all(v is None for v in (self.bedrooms, self.full_baths, self.offices_min, self.sqft))
+        return all(v is None for v in (self.bedrooms, self.full_baths, self.offices_min, self.sqft, self.workrooms_min, self.courts_min))
 
     def describe(self) -> str:
         """Round-trips through parse(): parse(req.describe()) == req."""
@@ -55,6 +57,8 @@ class Requirements:
             parts.append(f"{baths:g} bath")
         if self.offices_min:
             parts.append(f"{self.offices_min}+ office")
+        if self.workrooms_min: parts.append(f"{self.workrooms_min} workrooms")
+        if self.courts_min: parts.append(f"{self.courts_min} basketball courts")
         if self.sqft is not None:
             parts.append(f"{self.sqft:.0f} sq ft")
         return ", ".join(parts)
@@ -80,7 +84,11 @@ def parse(text: str) -> Requirements:
     else:
         office_min = None
 
+    works = re.search(_NUM + r"\s*(?:work\s*rooms?|workshops?|work\s+(?:room\s+)?areas?|workspaces?)\b", t)
+    court = re.search(_NUM + r"\s*basketball\s+courts?\b", t)
     return Requirements(
+        workrooms_min=int(_num(works.group(1))) if works else (1 if re.search(r"work\s*room|workshop", t) else None),
+        courts_min=int(_num(court.group(1))) if court else (1 if 'basketball' in t else None),
         bedrooms=int(_num(beds.group(1))) if beds else None,
         full_baths=full,
         half_baths=half,
@@ -111,8 +119,13 @@ def count(rooms: Iterable[RoomSpec]) -> Counts:
 
 def mismatches(req: Requirements, rooms: Iterable[RoomSpec], requested_sqft: Optional[float] = None) -> list[str]:
     """Plain-English list of ways the plan misses the prompt ([] = matches)."""
+    rooms = list(rooms)
     c = count(rooms)
     errs = []
+    works = sum(r.type == 'workroom' or bool(re.search(r'work\s*room|workshop', r.name, re.I)) for r in rooms)
+    courts = sum(r.type == 'basketball_court' or 'basketball' in r.name.lower() for r in rooms)
+    if req.workrooms_min is not None and works < req.workrooms_min: errs.append(f'The prompt asks for {req.workrooms_min} workrooms but the plan has {works}')
+    if req.courts_min is not None and courts < req.courts_min: errs.append(f'The prompt asks for {req.courts_min} basketball court(s) but the plan has {courts}')
     if req.bedrooms is not None and c.bedrooms != req.bedrooms:
         errs.append(f"The prompt asks for {req.bedrooms} bedrooms but the plan has {c.bedrooms}")
     if req.full_baths is not None and c.full_baths != req.full_baths:

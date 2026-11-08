@@ -3,6 +3,8 @@
 // Every mockup imports this so all 5 designs show the same house and the same build story.
 // Swap LAYOUT / THINKING_SCRIPT for live API data later (GenerateResponse in docs/CONTRACTS.md).
 import * as THREE from "three";
+import { roomExtras, courtPlanSVG } from "./roomRenderers.js";
+import { buildWallSegments } from "../lib/wallTopology.js";
 import { generate, parsePrompt } from "./planner.js";
 export { generate, parsePrompt };
 
@@ -37,63 +39,7 @@ export const RULES = [
 
 // ---------- walls (port of frontend/src/lib/walls.ts) ----------
 export const GRID = 0.5, WALL_T = 0.33, WALL_H = 9, EYE_H = 5.5;
-const k = (n) => Math.round(n / GRID);
-export function buildWalls(layout = LAYOUT) {
-  const { width_ft: W, depth_ft: D } = layout.footprint;
-  const H = new Set(), V = new Set();
-  for (const r of layout.rooms) {
-    const [x0, x1, y0, y1] = [k(r.x), k(r.x + r.w), k(r.y), k(r.y + r.h)];
-    for (let c = x0; c < x1; c++) { H.add(`${y0},${c}`); H.add(`${y1},${c}`); }
-    for (let rr = y0; rr < y1; rr++) { V.add(`${x0},${rr}`); V.add(`${x1},${rr}`); }
-  }
-  for (const d of layout.doors) {
-    const half = d.width_ft / 2, row = k(d.y), col = Math.floor(d.x / GRID);
-    if (H.has(`${row},${col}`) || H.has(`${row},${col - 1}`)) {
-      for (let c = k(d.x - half); c < k(d.x + half); c++) H.delete(`${row},${c}`);
-    } else {
-      const vcol = k(d.x);
-      for (let rr = k(d.y - half); rr < k(d.y + half); rr++) V.delete(`${vcol},${rr}`);
-    }
-  }
-  // open-plan pairs (layout.open): no wall on their shared edge
-  for (const [a, b] of layout.open ?? []) {
-    const A = roomById(a, layout), B = roomById(b, layout); if (!A || !B) continue;
-    for (const [P, Q] of [[A, B], [B, A]]) {
-      if (Math.abs(P.x + P.w - Q.x) < 0.01) { const y0 = Math.max(P.y, Q.y), y1 = Math.min(P.y + P.h, Q.y + Q.h); for (let rr = k(y0); rr < k(y1); rr++) V.delete(`${k(Q.x)},${rr}`); }
-      if (Math.abs(P.y + P.h - Q.y) < 0.01) { const x0 = Math.max(P.x, Q.x), x1 = Math.min(P.x + P.w, Q.x + Q.w); for (let c = k(x0); c < k(x1); c++) H.delete(`${k(Q.y)},${c}`); }
-    }
-  }
-  const segs = [];
-  const merge = (set, horizontal) => {
-    const lines = new Map();
-    for (const key of set) {
-      const [line, pos] = key.split(",").map(Number);
-      if (!lines.has(line)) lines.set(line, []);
-      lines.get(line).push(pos);
-    }
-    for (const [line, ps] of lines) {
-      ps.sort((a, b) => a - b);
-      let start = ps[0], prev = ps[0];
-      const flush = () => {
-        const a = start * GRID, b = (prev + 1) * GRID, l = line * GRID;
-        const exterior = horizontal ? l === 0 || l === D : l === 0 || l === W;
-        segs.push(horizontal ? { x1: a, y1: l, x2: b, y2: l, exterior } : { x1: l, y1: a, x2: l, y2: b, exterior });
-      };
-      for (const p of ps.slice(1)) { if (p !== prev + 1) { flush(); start = p; } prev = p; }
-      flush();
-    }
-  };
-  merge(H, true); merge(V, false);
-  // tag each segment with the room whose edge it lies on (first match) — used for per-room build order
-  for (const s of segs) {
-    const mx = (s.x1 + s.x2) / 2, my = (s.y1 + s.y2) / 2;
-    const r = layout.rooms.find((r) =>
-      (Math.abs(mx - r.x) < 0.01 || Math.abs(mx - (r.x + r.w)) < 0.01 ? my >= r.y && my <= r.y + r.h : false) ||
-      (Math.abs(my - r.y) < 0.01 || Math.abs(my - (r.y + r.h)) < 0.01 ? mx >= r.x && mx <= r.x + r.w : false));
-    s.roomId = r ? r.id : null;
-  }
-  return segs;
-}
+export function buildWalls(layout = LAYOUT) { return buildWallSegments(layout); }
 
 export function roomById(id, layout = LAYOUT) { return layout.rooms.find((r) => r.id === id); }
 export const sqft = (r) => Math.round(r.w * r.h);
@@ -105,7 +51,7 @@ export const fmtFt = (n) => { const f = Math.floor(n), i = Math.round((n - f) * 
 export function buildHouse(layout = LAYOUT, opts = {}) {
   const {
     floorColor = (room) => 0xe9e6df, wallColor = 0xffffff, exteriorWallColor = null,
-    wallHeight = WALL_H, glassColor = 0x9fc3ff, frameColor = 0x2b45f5, castShadow = true,
+    wallHeight = layout.ceiling_ft ?? WALL_H, glassColor = 0x9fc3ff, frameColor = 0x2b45f5, castShadow = true,
   } = opts;
   const { width_ft: W, depth_ft: D } = layout.footprint;
   const ox = -W / 2, oz = -D / 2;
@@ -124,12 +70,14 @@ export function buildHouse(layout = LAYOUT, opts = {}) {
   }
 
   const segs = buildWalls(layout);
-  const wallMatInt = new THREE.MeshStandardMaterial({ color: wallColor, roughness: 0.9 });
-  const wallMatExt = new THREE.MeshStandardMaterial({ color: exteriorWallColor ?? wallColor, roughness: 0.9 });
+  const industrial = layout.style === "industrial" || layout.style === "brutalist";
+  const wallMatInt = new THREE.MeshStandardMaterial({ color: industrial ? 0xa5a49e : wallColor, roughness: 0.95 });
+  const wallMatExt = new THREE.MeshStandardMaterial({ color: industrial ? 0x969791 : (exteriorWallColor ?? wallColor), roughness: 0.9 });
   const winLines = windowLines(layout);
   // Each wall segment becomes 1+ pieces: full-height runs, and sill (0–3 ft) + header (7 ft–top)
   // where a window cuts through. Every piece pivots at the floor so scale.y still "raises" it.
   for (const s of segs) {
+    const thickness = s.thickness ?? WALL_T;
     const horiz = s.y1 === s.y2;
     const a0 = horiz ? s.x1 : s.y1, b0 = horiz ? s.x2 : s.y2, line = horiz ? s.y1 : s.x1;
     const cuts = winLines
@@ -138,14 +86,14 @@ export function buildHouse(layout = LAYOUT, opts = {}) {
     const pieces = []; let cur = a0;
     for (const c of cuts) {
       if (c.a > cur) pieces.push([cur, c.a, 0, wallHeight]);
-      pieces.push([c.a, c.b, 0, 3], [c.a, c.b, 7, wallHeight]);
+      pieces.push([c.a, c.b, 0, c.sill], [c.a, c.b, c.head, wallHeight]);
       cur = c.b;
     }
     if (cur < b0) pieces.push([cur, b0, 0, wallHeight]);
     for (const [a, b, y0, y1] of pieces) {
-      const ea = a === a0 ? a - WALL_T / 2 : a, eb = b === b0 ? b + WALL_T / 2 : b;
+      const ea = a, eb = b; // Do not extend end caps into door clear widths.
       const len = eb - ea, hh = y1 - y0;
-      const g = new THREE.BoxGeometry(horiz ? len : WALL_T, hh, horiz ? WALL_T : len);
+      const g = new THREE.BoxGeometry(horiz ? len : thickness, hh, horiz ? thickness : len);
       g.translate(0, y0 + hh / 2, 0);
       const m = new THREE.Mesh(g, s.exterior ? wallMatExt : wallMatInt);
       const mid = (ea + eb) / 2;
@@ -165,6 +113,14 @@ export function buildHouse(layout = LAYOUT, opts = {}) {
     ceilings.add(p);
   }
   group.add(ceilings);
+  if (industrial) {
+    for (const room of layout.rooms.filter(r => r.type === "basketball_court" || r.type === "living")) {
+      for (let z=room.y+6; z<room.y+room.h-2; z+=16) {
+        const beam = new THREE.Mesh(new THREE.BoxGeometry(room.w,.5,.3),new THREE.MeshStandardMaterial({color:0x3c4244,metalness:.5,roughness:.5}));
+        beam.position.set(ox+room.x+room.w/2,wallHeight-.4,oz+z);beam.userData={kind:"illustrative_structure"};ceilings.add(beam);
+      }
+    }
+  }
 
   // windows: thin glass pane sitting in the wall opening (3–7 ft)
   const glassMat = new THREE.MeshStandardMaterial({ color: glassColor, transparent: true, opacity: 0.45, roughness: 0.05, metalness: 0.1 });
@@ -175,10 +131,11 @@ export function buildHouse(layout = LAYOUT, opts = {}) {
     if (w.wall === "south") { x = r.x + w.offset_ft + w.width_ft / 2; z = r.y + r.h; }
     if (w.wall === "west") { x = r.x; z = r.y + w.offset_ft + w.width_ft / 2; }
     if (w.wall === "east") { x = r.x + r.w; z = r.y + w.offset_ft + w.width_ft / 2; }
-    const g = new THREE.BoxGeometry(horiz ? w.width_ft : 0.08, 4, horiz ? 0.08 : w.width_ft);
-    g.translate(0, 2, 0);
+    const sill = w.sill_ft ?? 3, head = w.head_ft ?? 7;
+    const g = new THREE.BoxGeometry(horiz ? w.width_ft : 0.08, head-sill, horiz ? 0.08 : w.width_ft);
+    g.translate(0, (head-sill)/2, 0);
     const m = new THREE.Mesh(g, glassMat);
-    m.position.set(ox + x, 3, oz + z);
+    m.position.set(ox + x, sill, oz + z);
     m.userData = { kind: "window", roomId: w.room };
     windows.push(m); group.add(m);
   }
@@ -186,6 +143,7 @@ export function buildHouse(layout = LAYOUT, opts = {}) {
   // door frames (thin header over each opening)
   const frameMat = new THREE.MeshStandardMaterial({ color: frameColor, roughness: 0.5 });
   for (const d of layout.doors) {
+    if ((layout.open_connections ?? []).some(pair => pair.every(id => d.between.includes(id)))) continue;
     const horizWall = layout.rooms.some((r) => Math.abs(r.y - d.y) < 0.01 || Math.abs(r.y + r.h - d.y) < 0.01)
       && !layout.rooms.some((r) => Math.abs(r.x - d.x) < 0.01 && d.y > r.y && d.y < r.y + r.h);
     const g = new THREE.BoxGeometry(horizWall ? d.width_ft : WALL_T + 0.06, wallHeight - 7, horizWall ? WALL_T + 0.06 : d.width_ft);
@@ -444,6 +402,7 @@ export function planSVG(layout = LAYOUT, { pad = 2, labels = true, dims = true }
       : [r.x + r.w, r.y + w.offset_ft, r.x + r.w, r.y + w.offset_ft + w.width_ft];
     return `<line class="p-win" data-room="${w.room}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
   }).join("");
+  const courtMarks = layout.rooms.map(courtPlanSVG).join("");
   const lbl = labels ? layout.rooms.filter((r) => r.type !== "closet").map((r) => {
     const small = r.w < 6 || r.h < 6; const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
     const rot = r.w < 6 && r.h > r.w ? ` transform="rotate(-90 ${cx} ${cy})"` : "";
@@ -451,7 +410,7 @@ export function planSVG(layout = LAYOUT, { pad = 2, labels = true, dims = true }
   }).join("") : "";
   const e = layout.entrance;
   return `<svg class="plan-svg" viewBox="${-pad} ${-pad} ${W + pad * 2} ${D + pad * 2}" xmlns="http://www.w3.org/2000/svg">
-    <g class="p-rooms">${rooms}</g><g class="p-walls">${walls}</g><g class="p-wins">${wins}</g>
+    <g class="p-rooms">${rooms}</g><g class="p-courts">${courtMarks}</g><g class="p-walls">${walls}</g><g class="p-wins">${wins}</g>
     <g class="p-entry"><path class="p-door" d="M${e.x - 1.5} ${e.y + 0.9} L${e.x} ${e.y + 0.2} L${e.x + 1.5} ${e.y + 0.9}"/></g>
     <g class="p-labels">${lbl}</g></svg>`;
 }
@@ -460,10 +419,10 @@ export function planSVG(layout = LAYOUT, { pad = 2, labels = true, dims = true }
 export function windowLines(layout = LAYOUT) {
   return layout.windows.map((w) => {
     const r = roomById(w.room, layout);
-    if (w.wall === "north") return { horiz: true, line: r.y, a: r.x + w.offset_ft, b: r.x + w.offset_ft + w.width_ft };
-    if (w.wall === "south") return { horiz: true, line: r.y + r.h, a: r.x + w.offset_ft, b: r.x + w.offset_ft + w.width_ft };
-    if (w.wall === "west") return { horiz: false, line: r.x, a: r.y + w.offset_ft, b: r.y + w.offset_ft + w.width_ft };
-    return { horiz: false, line: r.x + r.w, a: r.y + w.offset_ft, b: r.y + w.offset_ft + w.width_ft };
+    if (w.wall === "north") return { sill: w.sill_ft ?? 3, head: w.head_ft ?? 7, horiz: true, line: r.y, a: r.x + w.offset_ft, b: r.x + w.offset_ft + w.width_ft };
+    if (w.wall === "south") return { sill: w.sill_ft ?? 3, head: w.head_ft ?? 7, horiz: true, line: r.y + r.h, a: r.x + w.offset_ft, b: r.x + w.offset_ft + w.width_ft };
+    if (w.wall === "west") return { sill: w.sill_ft ?? 3, head: w.head_ft ?? 7, horiz: false, line: r.x, a: r.y + w.offset_ft, b: r.y + w.offset_ft + w.width_ft };
+    return { sill: w.sill_ft ?? 3, head: w.head_ft ?? 7, horiz: false, line: r.x + r.w, a: r.y + w.offset_ft, b: r.y + w.offset_ft + w.width_ft };
   });
 }
 
@@ -648,6 +607,7 @@ export function buildFurniture(layout = LAYOUT, style = FURNITURE_STYLES.neutral
   const { width_ft: W, depth_ft: D } = layout.footprint;
   const ox = -W / 2, oz = -D / 2;
   const group = new THREE.Group(); group.name = "furniture";
+  if (layout.style === "industrial" || layout.style === "brutalist") style = { ...style, wood: 0x8f8879, white: 0xc2c2bb, fabric: 0x777a74, dark: 0x323839, accent: 0x686d67, accent2: 0x989c93, accent3: 0x737b78 };
   const mats = {};
   const colorOf = (k, r) => style.perRoom?.[r.id]?.[k] ?? style.perType?.[r.type]?.[k] ?? style[k]
     ?? (COLOR_FALLBACK[k] && (style.perRoom?.[r.id]?.[COLOR_FALLBACK[k]] ?? style.perType?.[r.type]?.[COLOR_FALLBACK[k]] ?? style[COLOR_FALLBACK[k]]))
@@ -666,6 +626,12 @@ export function buildFurniture(layout = LAYOUT, style = FURNITURE_STYLES.neutral
     const cx = ox + r.x + r.w / 2, cz = oz + r.y + r.h / 2;
     rg.position.set(cx, 0, cz);
     const itemGroups = {};
+    const extra = roomExtras(r);
+    if (extra) {
+      extra.userData = { kind: "specialized-room", roomId: r.id, home: extra.position.clone() };
+      rg.add(extra);
+      extra.traverse(mesh => { if (mesh.isMesh) { mesh.userData = {kind: "furniture", roomId:r.id, name:mesh.name}; pieces.push(mesh); } });
+    }
     const raw = piecesFor(r, f.U, f.V);
     // slide each group (a bed with its nightstands, art and rug moves together) along its wall to clear
     // door swings before anything gets dropped

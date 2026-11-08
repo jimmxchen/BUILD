@@ -274,6 +274,11 @@ def check(layout: Layout) -> list[Check]:
         except Exception as e:  # a broken rule must not crash generation
             errs = [f"rule crashed: {e!r}"]
         out.append(Check(rule=name, pass_=not errs, message="; ".join(errs)))
+    if layout.architecture_version >= 1:
+        from .architecture_checks import usable_rooms, circulation, wall_topology
+        for name, rule in (("usable_room_geometry", usable_rooms), ("privacy_circulation", circulation), ("canonical_wall_topology", wall_topology)):
+            errors = rule(layout)
+            out.append(Check(rule=name, pass_=not errors, message="; ".join(errors)))
     return out
 
 

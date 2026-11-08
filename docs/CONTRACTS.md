@@ -102,7 +102,7 @@ GenerateResponse = {
 On generation failure the API serves a validated file from `backend/cached/`
 with `cached: true` (disable with `WALKTHRU_CACHE_FALLBACK=0`). It prefers a
 backup matching explicit bedroom, bathroom, office, and square-footage requests;
-if none match, it chooses any valid backup. `?cached=true` uses the same selection.
+if none match, it returns HTTP 422 rather than substituting another program. `?cached=true` uses the same selection.
 
 ### Chat (`POST /api/chat`)
 
@@ -132,3 +132,49 @@ ChatResponse = { action: "ask" | "answer" | "edit" | "generate",
 With an API key, Claude decides in one structured-output call (`prompts.CHAT_SYSTEM`). With
 `WALKTHRU_OFFLINE=1` keyword heuristics stand in; offline edits come back unchanged (the offline
 planner doesn't edit) and the reply says so.
+
+## Architecture-aware generation (version 1)
+
+New planner output uses `architecture_version: 1`. Missing/zero means a legacy
+saved layout; it continues to load and use the legacy solver/checks. New fields
+are additive and defaulted in Python and optional in TypeScript.
+
+- Program and layout: `archetype` (`residential`, `warehouse_conversion`, `loft`,
+  `mixed_use`, `office`, `custom`), `style` (`neutral`, `industrial`, `brutalist`),
+  `design_notes: string[]`. Program also has `open_plan: boolean`.
+- Room types add `workroom` and `basketball_court`. Rooms/specs add `zone`
+  (`public`, `private`, `work`, `recreation`, `service`, `circulation`), optional
+  positive `min_width_ft`/`min_depth_ft`, `max_aspect_ratio >= 1`,
+  `court_format` (`auto`, `full`, `half`, `compact`) and `ceiling_height_ft`.
+  Dimension pairs permit a 90-degree rotation. `auto` is resolved before solving.
+- Layout adds `ceiling_ft`, `open_connections: [roomId, roomId][]`, and `walls`.
+  Open connections explicitly remove a shared public-room partition.
+- Doors preserve `orientation` (`horizontal`/`vertical`) and `kind`
+  (`door`, `front`, `opening`). Windows preserve `sill_ft`/`head_ft` (defaults 3/7).
+- Each canonical wall has `id`, ordered `x1,y1,x2,y2`, `orientation`, `exterior`,
+  `rooms: string[]`, `thickness_ft`, and `openings`. Each opening has `type`,
+  `offset_ft`, `width_ft`, `sill_ft`, `head_ft`; offset is from the first endpoint.
+  Coordinates are wall centerlines. Exterior thickness is 0.5 ft, interior 0.375 ft.
+  Ownership splits are retained even across collinear spans. A full-height open
+  connection has type `open`. Doors/windows and walls must be rebuilt together.
+
+`backend/walkthru/room_specs.json` is the configurable dimension registry;
+`frontend/src/lib/room-specs.json` is its tested identical rendering copy. It
+separates hard minimum side/aspect limits from preferred aspect ratios. Court
+playing surfaces and clearance envelopes are separately represented. Concept
+clearance allowances do not certify building-code or structural compliance.
+
+Version 1 adds hard checks `usable_room_geometry`, `privacy_circulation`, and
+`canonical_wall_topology`. The latter rejects stale, missing, duplicate,
+interior-crossing or incorrectly owned walls and missing door openings.
+Adjacency preferences, proportions within the hard limits, circulation area,
+and edit stability contribute to bounded candidate scoring.
+
+Infeasible programs return HTTP 422 with a human-readable `detail`. Explicit
+full-size courts are never scaled to fit. An unspecified court may select a
+clearly disclosed recreational half/compact format in `design_notes`. Requested
+rooms are never removed to achieve feasibility. Cached fallback now requires a
+match for explicit counts (including workrooms/courts) and area; no matching
+backup returns 422. Versioned frontend edits require a validated server result;
+network failure preserves the existing geometry instead of locally resizing it
+and leaving stale canonical walls.
