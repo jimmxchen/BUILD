@@ -78,15 +78,22 @@ const CSS = `
   box-shadow:0 10px 30px rgba(0,0,0,.18),0 0 0 1px rgba(0,0,0,.06);font:13.5px/1.3 inherit;font-family:inherit}
 .xp-menu button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;padding:8px 10px;border:0;
   border-radius:8px;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
-.xp-menu button:hover,.xp-menu button:focus-visible{background:#f1f0ec;outline:none}
+.xp-menu button:hover:not(:disabled),.xp-menu button:focus-visible{background:#f1f0ec;outline:none}
+.xp-menu button:disabled{opacity:.5;cursor:default}
 .xp-menu small{color:#6b6b72;font-size:12px}
 `;
 
 /**
  * Adds an "Export" button at the end of the Walk through button's row, copying its classes and
  * mirroring its disabled state. Clicking opens a menu: CAD drawing (.dxf) or PDF plan sheet.
+ * `busy()` true (a chat edit is still animating in) disables both items, so nobody exports a
+ * half-applied layout.
  */
-export function addExportButton(walkBtn: HTMLElement | null, getLayout: () => Layout | null, { label = "Export" } = {}) {
+export function addExportButton(
+  walkBtn: HTMLElement | null,
+  getLayout: () => Layout | null,
+  { label = "Export", busy = () => false }: { label?: string; busy?: () => boolean } = {},
+) {
   if (!walkBtn || !walkBtn.parentElement) return null;
   if (!document.getElementById("xp-css")) {
     const st = document.createElement("style"); st.id = "xp-css"; st.textContent = CSS; document.head.append(st);
@@ -122,6 +129,7 @@ export function addExportButton(walkBtn: HTMLElement | null, getLayout: () => La
     it.querySelector("small")!.textContent = hint;
     it.addEventListener("click", async (e) => {
       e.preventDefault(); e.stopPropagation();
+      if (busy()) return;
       const layout = getLayout();
       close();
       if (layout) await run(layout);
@@ -137,6 +145,12 @@ export function addExportButton(walkBtn: HTMLElement | null, getLayout: () => La
       item("CAD drawing (.dxf)", "Walls, doors, windows and rooms on layers, in feet", exportDxf),
       item("PDF plan sheet", hasPhoto ? "To-scale plan, room sizes, exterior photo" : "To-scale plan, room sizes and total sq ft", (l) => exportPdf(l, photo())),
     );
+    if (busy()) {
+      for (const it of menu.querySelectorAll("button")) {
+        it.disabled = true;
+        it.querySelector("small")!.textContent = "Wait for the current edit to finish";
+      }
+    }
     document.body.append(menu);
     const r = b.getBoundingClientRect(), m = menu.getBoundingClientRect();
     const left = Math.max(8, Math.min(r.right - m.width, innerWidth - m.width - 8));

@@ -287,4 +287,5 @@ body.planmode #tags, body.planmode #dimTags, body.planmode .draghint { display: 
 .chathead h2 { font-size: 19px; }
 .panel .foot { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 12px 14px 14px; }
 .panel .foot #walkBtn { grid-column: 1 / -1; padding: 12px; }
-.panel .foot .walkbtn:not(#walkBtn) { grid-column: auto; padding: 9px 10px; font-size: 13.5px; border-radius: 10px; margin: 0 !important; }
+.panel .foot .walkbtn:not(#walkBtn) { grid-column: auto; padding: 9px 10px; font-size: 13.5px; border-radius: 10px; margin: 0 !important; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.panel .foot .pr-chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
