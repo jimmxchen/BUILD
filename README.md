@@ -1,164 +1,105 @@
 # Walkthru
 
-Describe a home in plain English → get a floor plan that passes real layout rules → walk
-through it in first person in 3D. Full spec: [docs/PRD.md](docs/PRD.md).
+**Describe a home. Get a floor plan you can inspect, edit, and walk through.**
 
-```
-prompt ─► planner (Claude) ─► room program ─► solver ─► layout ─► checker ─┬─ pass ─► 2D plan + 3D walk
-              ▲                                                            │
-              └────────────── plain-English failures (≤ 4 rounds) ◄────────┘
-```
+Walkthru turns a plain-language housing brief into a rule-checked layout and an interactive 3D walkthrough. It is built for people who have ideas for a home but need a quick way to see whether those ideas fit together before taking them to a designer or architect.
 
-**Everything talks through one layout JSON: [docs/CONTRACTS.md](docs/CONTRACTS.md).**
-Units are feet, origin top-left, rooms on a 0.5 ft grid.
+## The problem
 
-## Quickstart
+Planning a home from a written brief is hard. Rooms can overlap, doors can miss their walls, bedrooms can lack windows, and a plan that looks plausible may still be difficult to navigate. A static drawing also makes it hard to understand how rooms connect.
 
-Backend (Python 3.11+):
+## What Walkthru does
+
+1. **Describe the home** in everyday language, such as “3 bed, 2 bath, open kitchen, home office, about 1,800 sq ft.”
+2. **Generate a room program.** Claude proposes rooms, target sizes, and relationships.
+3. **Place the rooms.** A geometry solver lays out the rooms and openings.
+4. **Check the plan.** Walkthru checks geometry, circulation, room sizes, bedroom windows, and whether the plan matches the request. Failed checks can be sent back through a repair loop.
+5. **Explore and edit.** Review the 2D plan, move through the home in 3D, and request changes in plain language.
+
+The backend and frontend share one layout format. See [the layout contract](docs/CONTRACTS.md) for its fields and conventions.
+
+## Evaluation
+
+In one recorded run of 30 prompts, direct Claude geometry failed at least one layout check on **22 of 30 plans (73.3%)**. The Walkthru planner, solver, and repair loop produced **0 failing plans out of 30** under the same checker. The run used Claude Opus 5.5 at low effort; details and per-prompt results are in [`docs/eval/`](docs/eval/README.md).
+
+This measures compliance with the project’s implemented rules on that prompt set. It is not a measure of architectural quality, construction readiness, or building-code compliance. The pipeline’s checker also guides its repair loop, so the 0% result shows that the pipeline can enforce its own checks; it does not independently prove that every rule is complete or correct.
+
+## Run Walkthru locally
+
+### Requirements
+
+- Python 3.11 or newer
+- Node.js 20 or newer and npm
+- An Anthropic API key for live generation; the offline mode works without one
+
+### 1. Start the backend
+
+In a terminal from the repository root:
 
 ```bash
 cd backend
-python -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
 pip install -e ".[dev]"
-cp .env.example .env              # add ANTHROPIC_API_KEY, then: export $(cat .env | xargs)
-pytest -q                         # offline smoke tests, no key needed
+```
+
+For live generation, set your Anthropic key in this terminal and start the API:
+
+```bash
+export ANTHROPIC_API_KEY="your-key"
 uvicorn walkthru.api:app --reload --port 8000
 ```
 
-No API key yet? `WALKTHRU_OFFLINE=1 uvicorn walkthru.api:app --reload` returns a canned
-3-bed plan for every prompt, so UI and 3D work never block on Claude.
+To run without an API key, use the canned sample plan instead:
 
-Frontend (Node 20+):
+```bash
+WALKTHRU_OFFLINE=1 uvicorn walkthru.api:app --reload --port 8000
+```
+
+### 2. Start the frontend
+
+In a second terminal from the repository root:
 
 ```bash
 cd frontend
 npm install
-cp .env.example .env.local        # NEXT_PUBLIC_API_URL=http://localhost:8000
-npm run dev                       # http://localhost:3000
+cp .env.example .env.local
+npm run dev
 ```
 
-The page loads `/api/sample` on start and falls back to the bundled
-`src/lib/sample-layout.json` if the backend is down.
+Open [http://localhost:3000](http://localhost:3000). The frontend uses the backend at `http://localhost:8000` by default. To use another API address, set `NEXT_PUBLIC_API_URL` in `frontend/.env.local` and restart the frontend.
 
-## The app (Site model)
+Photoreal rendering and the on-site map view are optional and need additional service credentials. The core planner, 2D plan, and walkthrough do not require those integrations.
 
-`frontend/` is the build app: describe a home, watch it get planned and assembled on a floating
-island model, then edit it, drag furniture between rooms, walk through it, view it on a real lot
-("On site", Google 3D tiles) or open a photoreal Blender Cycles tour.
+## Run the checks
 
-- Scene engine: `frontend/src/build/` (plain JS + three.js). `siteModelApp.js` is the page logic,
-  `core.js` builds the house and furniture from the layout JSON, `planner.js` is an offline
-  fallback planner used only when the API can't be reached.
-- Generation and edits call the FastAPI backend (`NEXT_PUBLIC_API_URL`). The loading story replays
-  the real checker rounds from the response; backup generations are labelled as such.
-- Photoreal tour (optional): `render/blender_render.py` is a Modal app (`modal deploy render/blender_render.py`,
-  reuses the `house-assets` volume) and `render/bridge.py` is a local server the app talks to:
+From `backend/`, with the virtual environment active:
 
 ```bash
-python3 render/bridge.py          # http://127.0.0.1:8790, needs a logged-in Modal client
+pytest -q
 ```
 
-Each room renders on its own L40S (fast preview, then an automatic 4K pass). Without the bridge the
-button reads "Photoreal offline".
-
-## What works today (baseline, hour 0)
-
-Every stage runs end to end with a deliberately simple implementation. Each owner replaces
-theirs; the tests and contract keep everyone else unblocked.
-
-- **Planner**: Claude (`claude-opus-5-5`, effort `low`) via structured outputs → `RoomProgram`; fix and edit prompts.
-- **Solver**: open-plan public block + hallway spine with a band of rooms on each side; picks the
-  best of a few hundred candidates against the checker's rules (incl. door geometry) in under 0.4 s;
-  keeps unchanged rooms in place on edits. See `backend/walkthru/geometry/README.md`.
-- **Checker**: all 7 PRD rules implemented with plain-English messages.
-- **Pipeline/API**: fix loop (4 rounds, 1 fresh retry), cached-generation fallback.
-- **2D**: SVG plan with names, dimensions, walls with door gaps, windows, entrance.
-- **3D**: walls extruded from the same wall builder, floors, lights, PointerLock + WASD,
-  AABB collision, minimap with position and heading.
-- **Eval**: `backend/eval/run_eval.py`, 30 prompts, raw Claude vs. loop.
-
-## Who owns what
-
-| | Role | Owner | Code | First TODOs |
-|---|---|---|---|---|
-| 1 | AI planner | | `backend/walkthru/planner.py`, `prompts.py` | tune prompts so first-try JSON passes; measure rounds |
-| 2 | Geometry solver | | `backend/walkthru/solver.py` | respect `adjacent_to`; avoid skinny rooms; keep rooms fixed on edits (`keep=`) |
-| 3 | Rule checker + eval | | `backend/walkthru/checker.py`, `backend/eval/` | door-on-shared-wall rule; run eval, numbers by H18 |
-| 4 | 2D plan + app UI | | `frontend/src/app/page.tsx`, `components/{PromptBox,CheckerPanel,PlanView,Minimap}.tsx` | stream fix rounds live; prompt timer; polish |
-| 5 | 3D walkthrough | | `frontend/src/components/Walkthrough.tsx`, `lib/walls.ts` | door frames, materials, furniture placeholders, fps overlay |
-| 6 | Backend + demo lead | | `backend/walkthru/api.py`, `pipeline.py`, `backend/cached/` | deploy; cache 3 backups; deck; rehearse |
-
-Pairings: 1 ↔ 3 (error format), 2 ↔ 5 (units, walls), 4 ↔ 5 (plan state, minimap), 6 ↔ everyone (API).
-
-## Repo layout
-
-```
-backend/
-  walkthru/
-    schema.py     layout JSON contract (Pydantic)         — shared, change with care
-    prompts.py    Claude system prompts                    — role 1
-    planner.py    prompt → RoomProgram, fix, edit          — role 1
-    solver.py     RoomProgram → Layout                     — role 2
-    checker.py    Layout → checks                          — role 3
-    pipeline.py   planner → solver → checker fix loop      — role 6
-    api.py        FastAPI                                  — role 6
-  eval/           prompts.txt + run_eval.py (proof slide)  — role 3
-  cached/         backup generations for the demo          — role 6
-  tests/          offline smoke tests
-frontend/         Next.js 16 + React Three Fiber + drei
-  src/lib/        types.ts (contract mirror), api.ts, walls.ts, sample-layout.json
-  src/components/ PromptBox, CheckerPanel, PlanView, Minimap, Walkthrough
-shared/           sample_layout.json (canonical sample)
-docs/             PRD.md, CONTRACTS.md
-```
-
-## Handy commands
+To rerun the 30-prompt model evaluation, set `ANTHROPIC_API_KEY` and run:
 
 ```bash
-# proof-slide numbers (from backend/, needs ANTHROPIC_API_KEY)
 python -m eval.run_eval --mode both --n 30
-
-# regenerate the shared sample after changing the solver (from backend/)
-python -c "import json; from walkthru import solver, planner, checker; l=solver.solve(planner.sample_program()); l.checks=checker.check(l); open('../shared/sample_layout.json','w').write(json.dumps(l.to_json(), indent=2))"
-cd ../frontend && npm run sync-sample
-
-# save a backup generation for the demo (backend running)
-curl -s localhost:8000/api/generate -H 'content-type: application/json' \
-  -d '{"prompt":"3 bed, 2 bath, open kitchen, home office, about 1,800 sq ft"}' > backend/cached/3bed_office.json
 ```
 
-## Deploy on Vercel
+The evaluation makes live model calls and may produce different results on another run.
 
-Deploy this GitHub repository as two Vercel projects: set one project's Root Directory to `backend/` for the FastAPI API and the other's to `frontend/` for Next.js. The backend's `pyproject.toml` points Vercel at `walkthru.api:app`.
+## Project structure
 
-Set these Vercel environment variables:
+- `backend/walkthru/` — planner, geometry solver, rule checker, API, and generation pipeline
+- `backend/eval/` — evaluation prompts and runner
+- `frontend/` — Next.js application, plan view, and 3D walkthrough
+- `shared/sample_layout.json` — example layout using the shared data format
+- `docs/` — product requirements, layout contract, demo notes, and evaluation results
 
-- Backend: `ANTHROPIC_API_KEY` and `WALKTHRU_CORS` set to the frontend's deployed origin.
-- Frontend: `NEXT_PUBLIC_API_URL` set to the backend's deployed origin.
+## Current limitations
 
-After deployment, verify the API's `/health`, `/api/sample`, and `/api/generate` endpoints and test generation, editing, and the 3D walkthrough on the frontend URL. See [docs/DEMO.md](docs/DEMO.md) for the full deployment and rehearsal checklist.
+Walkthru is a design exploration tool, not a substitute for an architect, engineer, survey, permitting review, or code check. Its rules cover selected geometric and prompt requirements; they do not represent all accessibility, structural, environmental, or local building requirements.
 
-The API cache serves only backups that pass the current checker. Three distinct, validated curated backups are committed for the demo. Rebuild them with `python cached/build_backups.py --offline` from `backend/`, or run without `--offline` when an Anthropic key is available to capture live generations. See `backend/cached/README.md`.
+## License
 
-## Timeline gates
-
-- **H2** schema locked, `/api/sample` live ✅ (this skeleton)
-- **H8** prompt → plan → walkthrough works once. If the solver can't, fall back to grid packing.
-- **H14** all must-ship goals on the deployed URL
-- **H18** code freeze, eval numbers in the deck
-
-## Git
-
-Small PRs to `main`, one per role where possible. Changing the layout JSON = edit
-`schema.py` + `types.ts` + `docs/CONTRACTS.md` together and tell the team. Never commit `.env`.
-
-## Agent board
-
-Every teammate's coding agent coordinates on the pinned **Message Board** issue through `tools/board` (rules in [AGENTS.md](AGENTS.md)). One-time setup per person:
-
-```bash
-gh auth login          # GitHub CLI: https://cli.github.com
-tools/board whoami     # prints your login if it works
-```
-
-Claude Code picks up the hooks in `.claude/` automatically: unread posts show at session start and on every prompt, and the agent keeps a background `tools/board wait` running so it wakes up when someone tags it. Other agents read `AGENTS.md` and run `tools/board unread` before each task.
+No license has been added yet. Contact the project maintainers before reusing this code outside the project.
