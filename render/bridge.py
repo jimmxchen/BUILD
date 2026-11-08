@@ -2,7 +2,8 @@
 
   python3 render/bridge.py            # http://127.0.0.1:8790
 
-POST /render  {layout, parts, items, quality: "preview"|"final"}  -> {job, status, ...}
+POST /render  {layout, parts, items, quality, prev: <last job id>, changed: [room ids the edit targeted]}
+             -> {job, status, ...}; rooms not in `changed` keep the panoramas of job `prev`
 GET  /render/<job>                                              -> progress + tour + image urls
 GET  /health
 GET  /renders/<job>/<file>.jpg                                  -> rendered panoramas (CORS open)
@@ -26,10 +27,15 @@ from tour import plan_tour  # noqa: E402
 
 import os
 PORT = int(os.environ.get("BRIDGE_PORT", 8790))
+HOST = os.environ.get("BRIDGE_HOST", "127.0.0.1")  # 0.0.0.0 when hosted (render/bridge_modal.py)
 OUT = ROOT / "out" / "renders"
 PUBLIC = os.environ.get("BRIDGE_PUBLIC", f"http://127.0.0.1:{PORT}") + "/renders"
 # (width, samples, adaptive threshold). "auto" = fast preview, then an automatic 4K high-quality pass per room
-QUALITY = {"test": (1024, 32, 0.02), "preview": (2048, 96, 0.012), "final": (4096, 512, 0.004)}
+# v2: preview trades samples for speed (the denoiser covers it); the 4K pass runs 192 spp instead of
+# 512, about 3x faster per room with no visible noise indoors. QUALITY_VERSION busts cached jobs.
+QUALITY = {"test": (1024, 32, 0.02), "preview": (2048, 64, 0.02), "final": (4096, 128, 0.01)}
+QUALITY_VERSION = 3
+PARALLEL_HQ_MAX = 6  # edits: preview and 4K together; whole houses: 4K after previews (all-parallel starved previews at ~12 GPUs)
 JOBS = {}
 LOCK = threading.Lock()
 POOL = ThreadPoolExecutor(max_workers=24)
@@ -88,12 +94,91 @@ def run_node(job, nid, payload, quality, then_hq=False):
         save(job)
 
 
+def _inside(pt, r):
+    return r["x"] - 0.01 <= pt[0] <= r["x"] + r["w"] + 0.01 and r["y"] - 0.01 <= pt[1] <= r["y"] + r["h"] + 0.01
+
+
+def room_signatures(scene):
+    """What a room's panorama depends on: its own rectangle, the furniture in it and its openings.
+    Used when no edit focus is known (see reusable)."""
+    L = scene["layout"]
+    rooms = {r["id"]: r for r in L["rooms"]}
+    doors = L.get("doors", [])
+    def box(r):
+        return [r["x"], r["y"], r["w"], r["h"], r.get("type")]
+    def items_in(rid):
+        r = rooms[rid]
+        out = []
+        for it in scene.get("items", []) or []:
+            pos = it.get("pos") or it.get("at") or [it.get("x"), it.get("y")]
+            if it.get("room") == rid or (pos and None not in pos[:2] and _inside(pos[:2], r)):
+                out.append(it)
+        return out
+    sig = {}
+    for rid, r in rooms.items():
+        sig[rid] = hashlib.sha1(json.dumps({
+            "room": box(r),
+            "items": items_in(rid),
+            "parts": [pt for pt in (scene.get("parts") or []) if isinstance(pt, dict) and pt.get("room") == rid],
+            "doors": sorted(json.dumps(d, sort_keys=True) for d in doors if rid in (d.get("between") or [])),
+            "windows": sorted(json.dumps(w, sort_keys=True) for w in L.get("windows", []) if w.get("room") == rid),
+        }, sort_keys=True).encode()).hexdigest()
+    return sig
+
+
+# A room the user did not touch keeps its panorama even if the solver nudged it by a foot or re-placed a
+# chair; only a drastic change of the room itself (type, ~1/4 of its area, a wall moved 3+ ft, or the whole
+# room moved 4+ ft) forces a re-render.
+def _drastic(a, b):
+    if a is None or b is None or a.get("type") != b.get("type"):
+        return True
+    area_a, area_b = max(a["w"] * a["h"], 1e-6), max(b["w"] * b["h"], 1e-6)
+    if not 0.75 <= area_b / area_a <= 1.33:
+        return True
+    if abs(a["w"] - b["w"]) > 3 or abs(a["h"] - b["h"]) > 3:
+        return True
+    ca, cb = (a["x"] + a["w"] / 2, a["y"] + a["h"] / 2), (b["x"] + b["w"] / 2, b["y"] + b["h"] / 2)
+    return ((ca[0] - cb[0]) ** 2 + (ca[1] - cb[1]) ** 2) ** 0.5 > 4
+
+
+def reusable(job, prev, focus):
+    """Which rooms of `job` can keep the panorama rendered in `prev`.
+
+    focus = ids of the rooms the user's edit targeted (the frontend diffs the planner's room program).
+    With a focus: everything else is kept unless the room itself changed drastically. Without one
+    (a manual furniture move, or an older client): a room is kept only if nothing it shows changed."""
+    keep = []
+    prev_rooms = {r["id"]: r for r in prev["scene"]["layout"]["rooms"]} if prev.get("scene") else {}
+    rooms = {r["id"]: r for r in job["scene"]["layout"]["rooms"]}
+    for nid, s in job["tour"]["scenes"].items():
+        pn, ps = prev["nodes"].get(nid), prev["tour"]["scenes"].get(nid)
+        if not pn or not ps or pn.get("state") != "done":
+            continue
+        if focus:
+            ok = nid not in focus and not _drastic(prev_rooms.get(nid), rooms.get(nid))
+        else:
+            same_spot = [round(v, 2) for v in (s["x"], s["y"])] == [round(v, 2) for v in (ps["x"], ps["y"])]
+            ok = prev["sig"].get(nid) == job["sig"][nid] and same_spot
+        if ok:
+            keep.append(nid)
+    return keep
+
+
+def _load_job(key):
+    job = JOBS.get(key)
+    if job is None:
+        p = OUT / key / "status.json"
+        job = json.loads(p.read_text()) if p.exists() else None
+    return job
+
+
 def start_job(payload):
     quality = payload.get("quality", "auto")
     if quality not in QUALITY and quality != "auto":
         quality = "auto"
     scene = {k: payload[k] for k in ("layout", "parts", "items")}
-    key = hashlib.sha1(json.dumps([scene, payload.get("only")], sort_keys=True).encode()).hexdigest()[:12] + "-" + quality
+    # the job id names the scene; "changed"/"prev" only steer which rooms are reused, so identical scenes share a job
+    key = hashlib.sha1(json.dumps([scene, payload.get("only"), QUALITY_VERSION], sort_keys=True).encode()).hexdigest()[:12] + "-" + quality
     with LOCK:
         if key in JOBS:
             return JOBS[key]
@@ -110,13 +195,33 @@ def start_job(payload):
         job = {"job": key, "quality": quality, "status": "rendering", "created": time.time(), "tour": tour,
                "nodes": {nid: {"state": "queued", "label": s["label"], **({"hq_state": "queued"} if quality == "auto" else {})}
                          for nid, s in tour["scenes"].items()},
-               "base": f"{PUBLIC}/{key}/"}
+               "base": f"{PUBLIC}/{key}/", "scene": scene, "sig": room_signatures(scene), "reused": []}
+        # Incremental re-render: only the room(s) the user changed render again; the rest keep their panoramas.
+        prev = _load_job(payload["prev"]) if payload.get("prev") and payload["prev"] != key else None
+        if prev and prev.get("sig") and prev.get("quality") == quality:
+            focus = [r for r in (payload.get("changed") or []) if isinstance(r, str)]
+            job["focus"] = focus
+            for nid in reusable(job, prev, focus):
+                job["nodes"][nid] = {**prev["nodes"][nid], "reused_from": prev["job"]}
+                job["reused"].append(nid)
         JOBS[key] = job
         save(job)
     # start with the start room so the viewer can open as early as possible
     order = [tour["start"]] + [n for n in tour["scenes"] if n != tour["start"]]
+    order = [n for n in order if n not in job["reused"]]
+    if not order:  # every room kept from the previous job
+        with LOCK:
+            job["status"] = "done"
+            job["finished"] = time.time()
+            save(job)
+        return job
+    parallel_hq = quality == "auto" and len(order) <= PARALLEL_HQ_MAX
     for nid in order:
-        if quality == "auto":
+        if quality == "auto" and parallel_hq:
+            # few rooms (an edit): preview and 4K at once, so the sharp image lands in ~45 s not ~70 s
+            POOL.submit(run_node, job, nid, scene, "preview", False)
+            POOL.submit(run_node, job, nid, scene, "final", None)
+        elif quality == "auto":
             POOL.submit(run_node, job, nid, scene, "preview", True)
         else:
             POOL.submit(run_node, job, nid, scene, quality, False)
@@ -125,14 +230,19 @@ def start_job(payload):
 
 class H(BaseHTTPRequestHandler):
     def _send(self, code, obj):
-        body = json.dumps(obj).encode()
+        # 204 must not carry a body: strict proxies (Modal's) reject "data after Connection: close"
+        body = b"" if code == 204 else json.dumps(obj).encode()
         self.send_response(code)
-        self.send_header("Content-Type", "application/json")
+        if body:
+            self.send_header("Content-Type", "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Headers", "content-type")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Max-Age", "86400")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if body:
+            self.wfile.write(body)
 
     def do_OPTIONS(self):
         self._send(204, {})
@@ -184,5 +294,5 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
-    print(f"build render bridge on http://127.0.0.1:{PORT}  ->  {OUT}")
-    ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
+    print(f"build render bridge on http://{HOST}:{PORT}  ->  {OUT}")
+    ThreadingHTTPServer((HOST, PORT), H).serve_forever()

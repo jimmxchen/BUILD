@@ -62,8 +62,8 @@ async function bridge(path, body) {
   if (!r.ok && r.status !== 404) throw new Error(`bridge ${r.status}`);
   return r.json();
 }
-export async function bridgeOnline() {
-  try { const c = new AbortController(); setTimeout(() => c.abort(), 1200); const r = await fetch(BRIDGE + "/health", { signal: c.signal }); return r.ok; } catch { return false; }
+export async function bridgeOnline(timeoutMs = 6000) {
+  try { const c = new AbortController(); setTimeout(() => c.abort(), timeoutMs); const r = await fetch(BRIDGE + "/health", { signal: c.signal }); return r.ok; } catch { return false; }
 }
 
 // ---------- styles ----------
@@ -126,16 +126,25 @@ function loadPannellum() {
 // ---------- controller (one per page) ----------
 function createController(getScene) {
   let job = null, poll = 0, sceneKey = null, stale = false, online = null, viewer = null, current = null, arrSig = null;
+  let pendingFocus = null; // room ids the last edit targeted: only these re-render, the rest keep their panoramas
   const listeners = new Set();
   const emit = () => listeners.forEach((f) => f());
   const keyOf = (s) => JSON.stringify(s.layout.rooms.map((r) => [r.id, r.x, r.y, r.w, r.h]));
   const counts = () => { const n = Object.values(job?.nodes ?? {}); return { done: n.filter((x) => x.state === "done").length, total: n.length }; };
+  // seconds since the job started (wall clock on the bridge); frozen once it finished
+  const elapsed = () => (job?.created ? Math.max(0, Math.round((job.finished ?? Date.now() / 1000) - job.created)) : 0);
 
+  let onlineAt = 0;
   async function start(quality = "auto") {
-    if (online === null) online = await bridgeOnline();
+    // a hosted bridge can be slow to answer right after a deploy: re-probe every 10 s instead of
+    // treating one failed probe as "offline" for the rest of the session
+    if (online !== true && Date.now() - onlineAt > 10000) { onlineAt = Date.now(); online = await bridgeOnline(); }
     if (!online) { emit(); return; }
     const { layout, furniture } = getScene();
-    const payload = { ...exportScene(layout, furniture), quality };
+    // prev + changed: the bridge keeps the panoramas of job `prev` for every room not in `changed`
+    // (the solver may nudge neighbours by a foot when one room grows; those are not re-rendered)
+    const payload = { ...exportScene(layout, furniture), quality, prev: job?.job ?? null, changed: pendingFocus ?? [] };
+    pendingFocus = null;
     sceneKey = keyOf(payload); stale = false; arrSig = JSON.stringify(furniture.getArrangement?.() ?? []);
     job = await bridge("/render", payload);
     emit(); tick();
@@ -156,12 +165,13 @@ function createController(getScene) {
     if (!job) return { state: "idle", text: "Photoreal" };
     const { done, total } = counts();
     if (stale) return { state: "stale", text: "Photoreal · re-render" };
-    if (job.status === "rendering") return { state: "rendering", text: `Photoreal · ${done}/${total} rooms` };
+    if (job.status === "rendering") return { state: "rendering", text: `Photoreal · ${done}/${total} rooms · ${elapsed()} s` };
     if (job.status === "refining") {
       const sharp = Object.values(job.nodes).filter((n) => n.hq).length;
-      return { state: "rendering", text: `Photoreal · sharpening ${sharp}/${total}` };
+      return { state: "rendering", text: `Photoreal · sharpening ${sharp}/${total} · ${elapsed()} s` };
     }
-    return { state: "done", text: "Photoreal tour" };
+    const kept = job.reused?.length ?? 0;
+    return { state: "done", text: kept && kept < total ? `Photoreal tour · ${total - kept} room${total - kept === 1 ? "" : "s"} in ${elapsed()} s` : `Photoreal tour · ${elapsed()} s` };
   }
 
   // ----- overlay -----
@@ -202,10 +212,10 @@ function createController(getScene) {
     cssClass: "pr-hs" + (ready ? "" : " pending"), id: `to-${link.to}`,
     createTooltipFunc: (div) => { const s = document.createElement("span"); s.textContent = ready ? link.label : `${link.label} · rendering`; div.appendChild(s); },
   });
-  function sceneConfig(id) {
+  function sceneConfig(id, extra = {}) {
     const s = job.tour.scenes[id], n = job.nodes[id];
-    return { type: "equirectangular", panorama: new URL(n.url, location.href).href, hfov: 105, yaw: s.links[0]?.yaw ?? 0, pitch: -4,
-      hotSpots: s.links.map((l) => hs(l, job.nodes[l.to]?.state === "done")) };
+    return { type: "equirectangular", panorama: new URL(n.url, location.href).href, hfov: 90, yaw: s.links[0]?.yaw ?? 0, pitch: -4,
+      hotSpots: s.links.map((l) => hs(l, job.nodes[l.to]?.state === "done")), ...extra };
   }
   const added = new Set(), shown = {};
   function syncViewer(force) {
@@ -214,18 +224,32 @@ function createController(getScene) {
     const { done, total } = counts();
     el.querySelector("#pr-wait").style.display = ready.length ? "none" : "grid";
     el.querySelector("#pr-wait .bar i").style.width = `${Math.max(4, (done / Math.max(1, total)) * 100)}%`;
-    el.querySelector("#pr-waitn").textContent = `${done} of ${total} rooms rendered`;
+    el.querySelector("#pr-waitn").textContent = `${done} of ${total} rooms rendered · ${elapsed()} s`;
     if (ready.length && !viewer) {
       const first = ready.includes(job.tour.start) ? job.tour.start : ready[0];
       const scenes = {}; for (const id of ready) { scenes[id] = sceneConfig(id); added.add(id); shown[id] = job.nodes[id].url; }
       viewer = pannellum.viewer(el.querySelector("#pr-pano"), { default: { firstScene: first, sceneFadeDuration: 900, autoLoad: true, showControls: false }, scenes });
       current = first;
       viewer.on("scenechange", (id) => { current = id; renderSide(); });
+      // Pannellum 2.5 sizes its canvas in CSS pixels, so Retina screens get half the detail. Measure
+      // what it did and lay the container out larger, scaled back down, so one texel maps to one pixel.
+      viewer.on("load", () => {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2), c = el.querySelector("#pr-pano canvas"), box = el.querySelector("#pr-pano");
+        if (!c || dpr <= 1 || box.dataset.dpr) return;
+        const need = dpr / (c.width / Math.max(1, c.clientWidth));
+        if (need > 1.05) {
+          box.dataset.dpr = "1";
+          Object.assign(box.style, { width: `${100 * need}%`, height: `${100 * need}%`, transform: `scale(${1 / need})`, transformOrigin: "0 0" });
+          viewer.resize();
+        }
+      });
     } else if (viewer) {
       // 4K pass landed for a room already in the tour: swap the image in place, keep the view
       for (const id of ready) if (added.has(id) && shown[id] !== job.nodes[id].url) {
         shown[id] = job.nodes[id].url;
-        viewer.addScene(id, sceneConfig(id));
+        // no crossfade for the swap: Pannellum's fade snapshots the canvas to an <img>, which fails on
+        // high-DPI canvases and leaves a blank layer over the view
+        viewer.addScene(id, sceneConfig(id, { sceneFadeDuration: 0 }));
         if (id === current) viewer.loadScene(id, viewer.getPitch(), viewer.getYaw(), viewer.getHfov());
       }
       for (const id of ready) if (!added.has(id)) {
@@ -247,7 +271,7 @@ function createController(getScene) {
     list.innerHTML = Object.entries(job.tour.scenes).map(([id, s]) => {
       const n = job.nodes[id], d = n.state === "done";
       const secs = n.started && !d ? Math.round(Date.now() / 1000 - n.started) : null;
-      const sub = d ? (n.hq ? `4K · ${n.hq_seconds ?? ""} s on GPU` : n.hq_state === "rendering" || n.hq_state === "queued" ? "preview · sharpening" : `${n.seconds ?? ""} s on GPU`) : n.state === "error" ? "failed" : n.state === "rendering" ? `rendering${secs ? ` · ${secs}s` : ""}` : "queued";
+      const sub = d ? (n.reused_from ? (n.hq ? "4K · unchanged, kept" : "kept from last render") : n.hq ? `4K · ${n.hq_seconds ?? ""} s on GPU` : n.hq_state === "rendering" || n.hq_state === "queued" ? "preview · sharpening" : `${n.seconds ?? ""} s on GPU`) : n.state === "error" ? "failed" : n.state === "rendering" ? `rendering${secs ? ` · ${secs}s` : ""}` : "queued";
       return `<button type="button" data-id="${id}" ${d ? "" : "disabled"} aria-current="${id === current}"><div class="th" style="${d ? `background-image:url(${n.url})` : ""}">${d ? "" : "<i></i>"}</div><div>${s.label}<small>${sub}</small></div></button>`;
     }).join("");
     list.querySelectorAll("button:not([disabled])").forEach((b) => b.addEventListener("click", () => viewer?.loadScene(b.dataset.id)));
@@ -269,18 +293,23 @@ function createController(getScene) {
     on: (f) => (listeners.add(f), () => listeners.delete(f)),
     // a new house: render automatically once per distinct layout
     async auto() {
-      const s = getScene(); if (!s?.layout || !s?.furniture) return;
+      const s = getScene(); if (!s?.layout || !s?.furniture || s.busy) return; // busy: an edit is still animating/furnishing
       const key = keyOf({ layout: s.layout });
       if (key === sceneKey && job) return;
+      if (online !== true && Date.now() - onlineAt <= 10000) return; // probe cooldown
       viewer?.destroy?.(); viewer = null; added.clear(); current = null;
       await start("auto");
     },
+    // an edit is about these rooms: the next render re-does only them (see start)
+    focus(ids) { pendingFocus = Array.isArray(ids) && ids.length ? ids.map(String) : null; },
     // furniture moved after a render: offer a re-render instead of spending GPU time on every drag
     markStale() { if (job) { stale = true; emit(); } },
     checkStale() {
-      if (!job || stale) return;
+      if (!job) return;
       const f = getScene()?.furniture; if (!f?.getArrangement) return;
-      if (JSON.stringify(f.getArrangement()) !== arrSig) { stale = true; emit(); }
+      // two-way: an item dragged back to where it was rendered clears the "re-render" state again
+      const moved = JSON.stringify(f.getArrangement()) !== arrSig;
+      if (moved !== stale) { stale = moved; emit(); }
     },
     async rerender() { viewer?.destroy?.(); viewer = null; added.clear(); current = null; await start("auto"); },
     get job() { return job; },
