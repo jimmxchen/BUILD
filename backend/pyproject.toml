@@ -21,6 +21,3 @@ include = ["walkthru*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-
-[tool.setuptools.package-data]
-walkthru = ["room_specs.json"]

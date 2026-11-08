@@ -12,7 +12,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import chat, pipeline, planner, solver, checker
-from .architecture import ArchitectureConflict
 from .schema import ChatRequest, ChatResponse, EditRequest, GenerateRequest, GenerateResponse
 
 logging.basicConfig(level=logging.INFO)
@@ -48,8 +47,6 @@ def _cached(prompt: str = "") -> GenerateResponse:
         matching = [resp for resp in valid if checker.check_prompt(prompt, resp.layout).pass_]
         if matching:
             valid = matching
-        else:
-            raise HTTPException(422, "No validated backup matches the requested spaces and area. Try again or adjust the brief; a different house will not be substituted.")
     resp = random.choice(valid)
     resp.cached = True
     return resp
@@ -79,8 +76,6 @@ def generate(req: GenerateRequest, cached: bool = False):
         return _cached(req.prompt)
     try:
         return pipeline.generate(req.prompt)
-    except ArchitectureConflict as e:
-        raise HTTPException(422, str(e))
     except Exception as e:
         logging.exception("generate failed")
         if os.environ.get("WALKTHRU_CACHE_FALLBACK", "1") == "1":
@@ -92,8 +87,6 @@ def generate(req: GenerateRequest, cached: bool = False):
 def edit(req: EditRequest):
     try:
         return pipeline.edit(req.program, req.layout, req.instruction)
-    except ArchitectureConflict as e:
-        raise HTTPException(422, str(e))
     except Exception as e:
         logging.exception("edit failed")
         raise HTTPException(500, str(e))

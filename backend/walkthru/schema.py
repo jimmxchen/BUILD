@@ -24,8 +24,6 @@ RoomType = Literal[
     "entry",
     "hall",
     "closet",
-    "workroom",
-    "basketball_court",
 ]
 
 Wall = Literal["north", "south", "east", "west"]
@@ -56,23 +54,9 @@ class RoomSpec(BaseModel):
     name: str = Field(description="display name, e.g. 'Bedroom 2'")
     target_sqft: float
     adjacent_to: list[str] = Field(default_factory=list, description="ids of rooms it should share a wall with")
-    zone: Literal["public", "private", "work", "recreation", "service", "circulation"] = "public"
-    min_width_ft: float | None = Field(default=None, gt=0)
-    min_depth_ft: float | None = Field(default=None, gt=0)
-    max_aspect_ratio: float | None = Field(default=None, ge=1)
-    court_format: Literal["auto", "full", "half", "compact"] | None = None
-    ceiling_height_ft: float | None = Field(default=None, ge=7)
-
-
-Archetype = Literal["residential", "warehouse_conversion", "loft", "mixed_use", "office", "custom"]
 
 
 class RoomProgram(BaseModel):
-    architecture_version: int = 0
-    archetype: Archetype = "residential"
-    style: Literal["neutral", "industrial", "brutalist"] = "neutral"
-    open_plan: bool = False
-    design_notes: list[str] = Field(default_factory=list)
     requested_sqft: float = Field(description="total house size from the prompt (gross, incl. halls)")
     aspect_ratio: float = Field(default=1.4, description="footprint width / depth, 1.0-2.0")
     rooms: list[RoomSpec]
@@ -98,8 +82,6 @@ class Door(BaseModel):
     x: float = Field(description="center of the opening, on the shared wall")
     y: float
     width_ft: float = 2.67
-    orientation: Literal["horizontal", "vertical"] | None = None
-    kind: Literal["door", "front", "opening"] = "door"
 
 
 class Window(BaseModel):
@@ -107,8 +89,6 @@ class Window(BaseModel):
     wall: Wall
     offset_ft: float = Field(description="from the wall's west/north end")
     width_ft: float = 4
-    sill_ft: float = 3
-    head_ft: float = 7
 
 
 # ---------- checker output (role 3) ----------
@@ -122,35 +102,7 @@ class Check(BaseModel):
     message: str = ""
 
 
-class WallOpening(BaseModel):
-    type: str
-    offset_ft: float
-    width_ft: float
-    sill_ft: float = 0
-    head_ft: float = 7
-
-
-class CanonicalWall(BaseModel):
-    id: str
-    x1: float
-    y1: float
-    x2: float
-    y2: float
-    orientation: Literal["horizontal", "vertical"]
-    exterior: bool
-    rooms: list[str]
-    thickness_ft: float
-    openings: list[WallOpening] = Field(default_factory=list)
-
-
 class Layout(BaseModel):
-    architecture_version: int = 0
-    archetype: Archetype = "residential"
-    style: Literal["neutral", "industrial", "brutalist"] = "neutral"
-    ceiling_ft: float = 9
-    design_notes: list[str] = Field(default_factory=list)
-    walls: list[CanonicalWall] = Field(default_factory=list)
-    open_connections: list[list[str]] = Field(default_factory=list)
     footprint: Footprint
     entrance: Point
     rooms: list[Room]
