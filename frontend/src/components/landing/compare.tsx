@@ -1,82 +1,59 @@
 "use client";
-// Same brief, three tools: ChatGPT and Claude (standalone scenes from comparison/standalone-ai-3d,
-// copied into public/compare) next to BUILD's own plan. Each card flips between its plan and its
-// 3D model; the 3D scenes and the walkthrough load only when asked, so the page stays light.
-import { useRef, useState, type ReactNode } from "react";
+// Same brief, three tools. ChatGPT and Claude are shown as their floor plans (from
+// comparison/standalone-ai-3d, copied into public/compare), small and quiet; BUILD is the live,
+// furnished model from the app engine, with the facts that set it apart.
+import { useState } from "react";
 import type { Layout } from "@/lib/types";
 import { BuildModel } from "./BuildModel";
 
 type View = "plan" | "3d";
 
-function Toggle({ view, setView, label }: { view: View; setView: (v: View) => void; label: string }) {
+/** A chatbot's result: its floor plan as generated, plus the one fact that matters. */
+function ChatbotCard({ tool, src, alt, size }: { tool: string; src: string; alt: string; size: string }) {
   return (
-    <div className="bl-seg" role="group" aria-label={`${label}: view`}>
-      {(["plan", "3d"] as const).map((v) => (
-        <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)}>{v === "plan" ? "Plan" : "3D"}</button>
-      ))}
-    </div>
-  );
-}
-
-/** The tool's still render; click opens its own interactive scene in a large overlay. */
-function Scene({ src, poster, title }: { src: string; poster: string; title: string }) {
-  const dlg = useRef<HTMLDialogElement>(null);
-  const [live, setLive] = useState(false);
-  const open = () => { setLive(true); dlg.current?.showModal(); };
-  return (
-    <>
-      <button type="button" className="bl-cmp-poster" onClick={open} aria-label={`Open ${title}`}>
+    <figure className="bl-cmp-card is-bot">
+      <header className="bl-cmp-head"><div><b>{tool}</b><span>{size}</span></div></header>
+      <div className="bl-cmp-media">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={poster} alt="" />
-        <span className="bl-cmp-play">Rotate it yourself</span>
-      </button>
-      <dialog ref={dlg} className="bl-cmp-dialog" aria-label={title} onClose={() => setLive(false)}
-        onClick={(e) => { if (e.target === dlg.current) dlg.current?.close(); }}>
-        <div className="bl-cmp-dialog-bar"><b>{title}</b><button type="button" onClick={() => dlg.current?.close()}>Close ✕</button></div>
-        {live && <iframe className="bl-cmp-frame" src={src} title={title} />}
-      </dialog>
-    </>
-  );
-}
-
-export function CompareCard({ tool, tag, mine = false, plan, model, render, note, initial = "plan" }: {
-  tool: string; tag: string; mine?: boolean; plan?: ReactNode; model?: ReactNode;
-  render?: (view: View) => ReactNode; note: string; initial?: View;
-}) {
-  const [view, setView] = useState<View>(initial);
-  return (
-    <figure className={`bl-cmp-card ${mine ? "is-mine" : ""}`}>
-      <header className="bl-cmp-head">
-        <div><b>{tool}</b><span>{tag}</span></div>
-        <Toggle view={view} setView={setView} label={tool} />
-      </header>
-      <div className="bl-cmp-media" data-view={view}>{render ? render(view) : view === "plan" ? plan : model}</div>
-      <figcaption className="bl-cmp-note">{note}</figcaption>
+        <img src={src} alt={alt} loading="lazy" />
+      </div>
+      <figcaption className="bl-cmp-verdict"><span className="ic" aria-hidden="true">✕</span>A picture of a plan. Nothing checks it.</figcaption>
     </figure>
   );
 }
 
 export function ChatGPTCard() {
-  return (
-    <CompareCard
-      tool="ChatGPT" tag="General chatbot"
-      // eslint-disable-next-line @next/next/no-img-element
-      plan={<img src="/compare/house-plan-chatgpt.png" alt="ChatGPT's floor plan: 45 by 40 feet" />}
-      model={<Scene src="/compare/index-chatgpt.html" poster="/compare/chatgpt-house-3d-view.jpg" title="ChatGPT's 3D scene" />}
-      note="A polished 45 × 40 ft concept with furniture and a room-size list. It is a picture of a plan: nothing checks doors, halls or room sizes."
-    />
-  );
+  return <ChatbotCard tool="ChatGPT" size="45 × 40 ft plan" src="/compare/house-plan-chatgpt.png" alt="ChatGPT's floor plan for the brief, 45 by 40 feet" />;
 }
 
 export function ClaudeCard() {
+  return <ChatbotCard tool="Claude" size="60 × 30 ft plan" src="/compare/claude-plan-simple.jpg" alt="Claude's floor plan for the brief, 60 by 30 feet" />;
+}
+
+/** BUILD: the app engine building the solved layout, furniture and all; one model for both views. */
+export function BuildCard({ layout, sqft }: { layout: Layout; sqft: number }) {
+  const [view, setView] = useState<View>("3d");
+  const passed = layout.checks.filter((c) => c.pass).length;
   return (
-    <CompareCard
-      tool="Claude" tag="General chatbot"
-      // eslint-disable-next-line @next/next/no-img-element
-      plan={<img src="/compare/claude-plan-simple.jpg" alt="Claude's floor plan: 60 by 30 feet" />}
-      model={<Scene src="/compare/claude-house.html" poster="/compare/claude-3d-simple.jpg" title="Claude's 3D scene" />}
-      note="A furnished 60 × 30 ft model. Also a one-off concept: nothing checks whether the layout works."
-    />
+    <figure className="bl-cmp-card is-mine">
+      <header className="bl-cmp-head">
+        <div><b>BUILD</b><span>Our platform</span></div>
+        <div className="bl-seg" role="group" aria-label="BUILD: view">
+          {(["3d", "plan"] as const).map((v) => (
+            <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)}>{v === "plan" ? "Plan" : "3D"}</button>
+          ))}
+        </div>
+      </header>
+      <div className="bl-cmp-media">
+        <BuildModel layout={layout} view={view} label={`BUILD's ${view === "plan" ? "floor plan" : "3D model"} of the brief, ${sqft.toLocaleString()} square feet, furnished`} />
+      </div>
+      <ul className="bl-cmp-stats" aria-label="What BUILD delivers from the brief">
+        <li><b className="bl-num">{passed}/{layout.checks.length}</b>layout rules pass</li>
+        <li><b className="bl-num">{sqft.toLocaleString()}</b>sq ft, measured</li>
+        <li><b className="bl-num">{layout.rooms.length}</b>rooms, furnished</li>
+        <li><b>Walkable</b>at eye height</li>
+      </ul>
+    </figure>
   );
 }
 
@@ -90,16 +67,5 @@ export function WalkthroughEmbed() {
       <img src="/walkthrough/poster.jpg" alt="" />
       <span className="bl-cmp-play">Step inside</span>
     </button>
-  );
-}
-
-/** BUILD: the app engine building the solved layout, furniture and all; one model for both views. */
-export function BuildCard({ layout, sqft }: { layout: Layout; sqft: number }) {
-  return (
-    <CompareCard
-      tool="BUILD" tag="Our platform" mine initial="3d"
-      render={(view) => <BuildModel layout={layout} view={view} label={`BUILD's ${view === "plan" ? "floor plan" : "3D model"} of the brief, ${sqft.toLocaleString()} square feet, furnished`} />}
-      note={`${sqft.toLocaleString()} sq ft. The same solved layout becomes the plan, the furnished 3D model and the walkthrough, and it passes every layout rule.`}
-    />
   );
 }

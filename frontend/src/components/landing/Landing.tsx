@@ -143,7 +143,7 @@ export default function Landing() {
           <div className="bl-wrap">
             <div className="bl-cmp-intro" data-reveal>
               <h2 id="compare-title">Same sentence. <em>Three very different houses.</em></h2>
-              <p className="bl-lede">We gave ChatGPT, Claude and BUILD the identical brief: <q>{PROMPT}</q>. Flip each between its plan and its 3D model.</p>
+              <p className="bl-lede">We gave ChatGPT, Claude and BUILD the identical brief: <q>{PROMPT}</q>. The chatbots draw a picture. BUILD delivers a checked, furnished home you can walk through.</p>
             </div>
             <div className="bl-cmp-grid" data-reveal>
               <ChatGPTCard />
