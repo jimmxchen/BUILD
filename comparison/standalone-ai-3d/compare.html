@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BUILD / ChatGPT / Claude · 3D comparison</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #172525; color: #f2eee4; font: 15px/1.5 system-ui, sans-serif; }
+    header { padding: 24px 28px 18px; border-bottom: 1px solid #415451; }
+    h1 { margin: 0 0 4px; font-size: 24px; }
+    p { margin: 0; color: #c0d0ca; }
+    main { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 20px; }
+    section { min-width: 0; border: 1px solid #445954; background: #223433; border-radius: 12px; overflow: hidden; }
+    .top { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 14px; }
+    h2 { margin: 0; font-size: 19px; }
+    label { font-size: 12px; color: #e7d7af; cursor: pointer; }
+    input { display: none; }
+    img { display: block; width: 100%; aspect-ratio: 4/3; object-fit: contain; background: #11201f; }
+    .empty { display: grid; place-items: center; width: 100%; aspect-ratio: 4/3; padding: 20px; color: #adc3bb; text-align: center; background: #11201f; }
+    small { display: block; padding: 12px 14px; color: #b9c9c2; }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header><h1>Same brief, three outputs</h1><p>3 bed, 2 bath, open kitchen, home office, about 1,800 sq ft</p></header>
+  <main>
+    <section><div class="top"><h2>BUILD</h2><label>Choose screenshot <input type="file" accept="image/*" data-target="build"></label></div><div class="empty" id="build">Choose a screenshot of BUILD's 3D result</div><small>Record whether generation was live or cached.</small></section>
+    <section><div class="top"><h2>ChatGPT</h2><a href="./index.html" style="color:#e7d7af;font-size:12px">Open scene ↗</a></div><img src="./chatgpt-house-3d.png" alt="ChatGPT cutaway house rendering"><small>One-shot standalone scene; visual concept.</small></section>
+    <section><div class="top"><h2>Claude</h2><label>Choose screenshot <input type="file" accept="image/*" data-target="claude"></label></div><div class="empty" id="claude">Choose the image Claude generated from CLAUDE_PROMPT.md</div><small>Run Claude in a new conversation using the same brief.</small></section>
+  </main>
+  <script>
+    for (const input of document.querySelectorAll('input[type=file]')) input.addEventListener('change', () => {
+      const file = input.files?.[0]; if (!file) return;
+      const holder = document.getElementById(input.dataset.target);
+      const url = URL.createObjectURL(file);
+      if (holder.dataset.url) URL.revokeObjectURL(holder.dataset.url);
+      const img = Object.assign(document.createElement('img'), { id: holder.id, src: url, alt: `${input.dataset.target} 3D result` });
+      img.dataset.url = url;
+      holder.replaceWith(img);
+    });
+  </script>
+</body>
+</html>
