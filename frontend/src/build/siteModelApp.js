@@ -6,7 +6,7 @@ import { DEFAULT_PROMPT, DEFAULT_PLAN, PHASES, RULES, lockupHTML, buildHouse, bu
   planFromResponse, parsePrompt, ruleLabel, smoothDamp } from "./core.js";
 import { enhanceRenderer, fitSun, createComposer } from "./render.js";
 import { createFurnitureDrag } from "./interact.js";
-import { addSiteButton } from "./site.js";
+import { addSiteButton, setExteriorFromText } from "./site.js";
 import { addPhotorealButton } from "./photoreal.js";
 import { addExportButton } from "@/lib/export/button";
 import { createFloatingIsland, createCloudSea, attachParallax, createMist, cameraDive, createMiniStage, roomDiorama } from "./atmosphere.js";
@@ -450,6 +450,7 @@ let waitTimer = 0;
 async function start(prompt) {
   if (diving || run) return;
   promptText = prompt;
+  setExteriorFromText(prompt); // "duke-style 3 bed" also picks the On site exterior
   const pending = requestPlan(prompt); // in flight during the dive
   resetHouse(); fixLog = [];
   $("#tray").innerHTML = ""; $("#rules").innerHTML = ""; $("#thought").textContent = ""; $("#ruleCount").textContent = "";
@@ -892,6 +893,8 @@ async function sendChat(text) {
   if (!text || chatBusy || editing || document.body.dataset.state !== "result") return;
   chatBusy = true; $("#chatForm .send").disabled = true; setOptions([]);
   addMsg("user", text); convo.push({ role: "user", content: text });
+  const style = setExteriorFromText(text);
+  if (style) addMsg("note", `Exterior set to ${style}. Open On site to see it.`);
   showTyping(true);
   const res = await callChat(convo, true);
   showTyping(false);
@@ -946,6 +949,7 @@ document.querySelectorAll(".ptabs [role=tab]").forEach((tab) => tab.addEventList
 let briefBusy = false;
 async function briefTurn(text) {
   if (diving || run || briefBusy) return;
+  setExteriorFromText(text); // a clarifying-question reply can name the style too ("japanese")
   const firstTurn = !convo.length || $("#clarify").hidden;
   if (firstTurn) convo.length = 0;
   convo.push({ role: "user", content: text });
