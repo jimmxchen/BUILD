@@ -63,13 +63,19 @@ export default function Landing() {
     <a className="lp-skip" href="#lp-main">Skip to content</a>
     <header className="lp-nav"><a href="#" aria-label="BUILD home"><Image src="/logo.webp" alt="BUILD" width={120} height={60} priority /></a><nav aria-label="Main navigation"><a href="#problem">The problem</a><a href="#how">How it works</a><a href="#explore">Explore</a><a href="#demo">Demo</a></nav><details className="lp-mobile-menu"><summary>Menu</summary><div><a href="#problem">The problem</a><a href="#how">How it works</a><a href="#explore">Explore</a><a href="#demo">Demo</a></div></details><Link className="lp-button" href="/">Try BUILD <span>↗</span></Link></header>
     <main id="lp-main">
-      <section className="lp-hero lp-grid">
-        <div className="lp-eyebrow"><span className="lp-dot" /> YOUR IDEAS. REAL DIMENSIONS.</div>
-        <h1>Imagine your home.<br /><em>Then walk through it.</em></h1>
-        <p className="lp-intro">Describe the place you have in mind. Turn it into a rule-checked floor plan, step inside in 3D, and make it yours.</p>
-        <div className="lp-actions"><Link className="lp-button" href="/">Try BUILD <span>↗</span></Link><a className="lp-text-link" href="#explore">Explore the experience <span>↓</span></a></div>
-        <div className="lp-hero-model"><div className="lp-sheet-label">BUILD / RESIDENCE 001<span>CONCEPT STUDY</span></div>{plan ? <div className="lp-flat"><PlanView layout={layout} /></div> : <Model />}<div className="lp-model-footer"><span>3 bedrooms · 2 baths · 1,708 sq ft</span><div className="lp-toggle" aria-label="Preview mode"><button aria-pressed={plan} onClick={() => setPlan(true)}>2D plan</button><button aria-pressed={!plan} onClick={() => setPlan(false)}>3D model</button></div></div></div>
-        <div className="lp-caption"><span>01 / FROM AN IDEA TO A PLACE</span><span>Actual bundled BUILD layout. Furnishings are illustrative.</span></div>
+      <section className="lp-hero">
+        <div className="lp-hero-model">
+          {plan ? <div className="lp-flat"><PlanView layout={layout} /></div> : <Model />}
+          <div className="lp-model-footer"><span>3 bedrooms · 2 baths · 1,708 sq ft</span><div className="lp-toggle" aria-label="Preview mode"><button aria-pressed={plan} onClick={() => setPlan(true)}>2D plan</button><button aria-pressed={!plan} onClick={() => setPlan(false)}>3D model</button></div></div>
+        </div>
+        <div className="lp-hero-copy">
+          <span className="lp-eyebrow">A LITTLE CLOSER TO HOME</span>
+          <h1>Imagine your home.<br />Then walk through it.</h1>
+          <p className="lp-intro">Describe the place you have in mind. BUILD plans the rooms, checks the layout, and gives you a home to explore.</p>
+          <div className="lp-start-bar"><span>Your ideas. A floor plan. A place to call home.</span><Link className="lp-button" href="/">Try BUILD <span>↗</span></Link></div>
+          <div className="lp-hero-chips"><span>Describe it naturally</span><span>Explore at eye height</span><a href="#explore">Explore the experience ↓</a></div>
+          <p className="lp-caption">Bundled BUILD sample · Furnishings are illustrative</p>
+        </div>
       </section>
       <section id="problem" className="lp-section">
         <div className="lp-section-head"><span className="lp-eyebrow">01 / THE DISTANCE BETWEEN IDEA & HOME</span><h2>Big decisions.<br /><span>Too little perspective.</span></h2><p>Plans on paper ask you to imagine everything. Traditional design takes expertise and iteration. And a beautiful AI image can’t tell you whether the rooms actually fit.</p></div>
@@ -82,7 +88,7 @@ export default function Landing() {
         <div className="lp-steps"><article><span className="lp-step-number">01</span><h3>Describe</h3><p>Start with how you want to live. BUILD interprets the rooms, relationships and space you need.</p><div className="lp-prompt">“A 3-bedroom home with an open kitchen, an office, and about 1,800 square feet.”<span>YOUR BRIEF <b>↗</b></span></div></article><article><span className="lp-step-number">02</span><h3>Generate</h3><p>AI plans the rooms. A deterministic solver places them. The checker tests the geometry.</p><div className="lp-mini-plan"><PlanView layout={layout} /></div></article><article><span className="lp-step-number">03</span><h3>Explore & refine</h3><p>Walk through at human scale. Ask for a change and explore the updated design.</p><div className="lp-edit"><span>“Make the kitchen bigger.”</span><div>ONE MODEL <i>→</i> 2D + 3D</div></div></article></div>
       </section>
       <section id="explore" ref={journey} className={`lp-journey ${reduced ? "lp-reduced" : ""}`}>
-        <div className="lp-sticky lp-grid"><div className="lp-tour-heading"><span className="lp-eyebrow">03 / A DIFFERENT PERSPECTIVE</span><h2>Go from looking.<br /><em>To being there.</em></h2><p>{reduced ? "Choose a viewpoint to explore the sample home." : "Scroll to step inside a real BUILD floor plan."}</p></div><Model progress={progress} /><div className="lp-tour-note"><span>{String(Math.floor(progress * 7) + 1).padStart(2, "0")} / 08</span><h3>{stage.label}</h3><p>{stage.detail}</p></div><div className="lp-tour-controls"><label htmlFor="tour-progress">Explore the house</label><input id="tour-progress" type="range" min="0" max="1" step="0.001" value={progress} onChange={e => {
+        <div className="lp-sticky"><div className="lp-tour-heading"><span className="lp-eyebrow">03 / A DIFFERENT PERSPECTIVE</span><h2>Go from looking.<br /><em>To being there.</em></h2><p>{reduced ? "Choose a viewpoint to explore the sample home." : "Scroll to step inside a real BUILD floor plan."}</p></div><Model progress={progress} /><div className="lp-tour-note"><span>{String(Math.floor(progress * 7) + 1).padStart(2, "0")} / 08</span><h3>{stage.label}</h3><p>{stage.detail}</p></div><div className="lp-tour-controls"><label htmlFor="tour-progress">Explore the house</label><input id="tour-progress" type="range" min="0" max="1" step="0.001" value={progress} onChange={e => {
           const value = Number(e.target.value); setProgress(value);
           if (!reduced && journey.current) window.scrollTo({ top: journey.current.offsetTop + value * (journey.current.offsetHeight - innerHeight), behavior: "instant" });
         }} /><a href="#technology">Continue to how it works ↓</a></div></div>
