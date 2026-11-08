@@ -8,12 +8,12 @@ Build turns a plain-language housing brief into a rule-checked layout and an int
 
 Planning a home from a written brief is hard. Rooms can overlap, doors can miss their walls, bedrooms can lack windows, and a plan that looks plausible may still be difficult to navigate. A static drawing also makes it hard to understand how rooms connect.
 
-## What Walkthru does
+## What Build does
 
 1. **Describe the home** in everyday language, such as “3 bed, 2 bath, open kitchen, home office, about 1,800 sq ft.”
 2. **Generate a room program.** Claude proposes rooms, target sizes, and relationships.
 3. **Place the rooms.** A geometry solver lays out the rooms and openings.
-4. **Check the plan.** Walkthru checks geometry, circulation, room sizes, bedroom windows, and whether the plan matches the request. Failed checks can be sent back through a repair loop.
+4. **Check the plan.** Build checks geometry, circulation, room sizes, bedroom windows, and whether the plan matches the request. Failed checks can be sent back through a repair loop.
 5. **Explore and edit.** Review the 2D plan, move through the home in 3D, and request changes in plain language.
 
 The backend and frontend share one layout format. See [the layout contract](docs/CONTRACTS.md) for its fields and conventions.
@@ -24,7 +24,7 @@ In one recorded run of 30 prompts, direct Claude geometry failed at least one la
 
 This measures compliance with the project’s implemented rules on that prompt set. It is not a measure of architectural quality, construction readiness, or building-code compliance. The pipeline’s checker also guides its repair loop, so the 0% result shows that the pipeline can enforce its own checks; it does not independently prove that every rule is complete or correct.
 
-## Run Walkthru locally
+## Run build locally
 
 ### Requirements
 
