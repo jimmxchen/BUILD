@@ -1,30 +1,41 @@
-# Walkthru
+# *build*
 
 **Describe a home. Get a floor plan you can inspect, edit, and walk through.**
 
-Walkthru turns a plain-language housing brief into a rule-checked layout and an interactive 3D walkthrough. It is built for people who have ideas for a home but need a quick way to see whether those ideas fit together before taking them to a designer or architect.
+*build* turns a plain-language housing brief into a rule-checked layout and an interactive 3D walkthrough. It is built for people who have ideas for a home but need a quick way to see whether those ideas fit together before taking them to a designer or architect. The Vercel deployment is still named **Walkthru**.
 
 ## The problem
 
 Planning a home from a written brief is hard. Rooms can overlap, doors can miss their walls, bedrooms can lack windows, and a plan that looks plausible may still be difficult to navigate. A static drawing also makes it hard to understand how rooms connect.
 
-## What Walkthru does
+## What *build* does
 
 1. **Describe the home** in everyday language, such as “3 bed, 2 bath, open kitchen, home office, about 1,800 sq ft.”
 2. **Generate a room program.** Claude proposes rooms, target sizes, and relationships.
 3. **Place the rooms.** A geometry solver lays out the rooms and openings.
-4. **Check the plan.** Walkthru checks geometry, circulation, room sizes, bedroom windows, and whether the plan matches the request. Failed checks can be sent back through a repair loop.
+4. **Check the plan.** *build* checks geometry, circulation, room sizes, bedroom windows, and whether the plan matches the request. Failed checks can be sent back through a repair loop.
 5. **Explore and edit.** Review the 2D plan, move through the home in 3D, and request changes in plain language.
 
 The backend and frontend share one layout format. See [the layout contract](docs/CONTRACTS.md) for its fields and conventions.
 
+## See the plan in 3D
+
+The 3D view is a core part of *build*: it turns the checked plan into a navigable house, so people can understand the spaces and circulation instead of interpreting a flat drawing alone. The 2D plan and 3D model use the same layout data, keeping room placement and openings aligned between views.
+
+- **Explore the live model:** orbit the house, inspect rooms and openings, and switch into a first-person walkthrough with keyboard movement and collision boundaries. A minimap shows your position and heading.
+- **Edit in context:** adjust the plan and furniture, then see the updated house in the model. Realtime rendering uses Three.js, lighting, and shadows.
+- **Render photoreal interiors (optional):** the Blender Cycles renderer creates a room-to-room 360° tour. Updated rooms can be rerendered after edits while unchanged room views are kept.
+- **Place the design on a site (optional):** the on-site view can use Google Photorealistic 3D Tiles. An optional image-rendering service adds photoreal exterior views.
+
+The interactive model and walkthrough work without the optional photoreal or map services. Those integrations need additional credentials and renderer setup; see [`docs/DEMO.md`](docs/DEMO.md) and [`render/`](render/).
+
 ## Evaluation
 
-In one recorded run of 30 prompts, direct Claude geometry failed at least one layout check on **22 of 30 plans (73.3%)**. The Walkthru planner, solver, and repair loop produced **0 failing plans out of 30** under the same checker. The run used Claude Opus 5.5 at low effort; details and per-prompt results are in [`docs/eval/`](docs/eval/README.md).
+In one recorded run of 30 prompts, direct Claude geometry failed at least one layout check on **22 of 30 plans (73.3%)**. The *build* planner, solver, and repair loop produced **0 failing plans out of 30** under the same checker. The run used Claude Opus 5.5 at low effort; details and per-prompt results are in [`docs/eval/`](docs/eval/README.md).
 
 This measures compliance with the project’s implemented rules on that prompt set. It is not a measure of architectural quality, construction readiness, or building-code compliance. The pipeline’s checker also guides its repair loop, so the 0% result shows that the pipeline can enforce its own checks; it does not independently prove that every rule is complete or correct.
 
-## Run Walkthru locally
+## Run *build* locally
 
 ### Requirements
 
@@ -95,11 +106,3 @@ The evaluation makes live model calls and may produce different results on anoth
 - `frontend/` — Next.js application, plan view, and 3D walkthrough
 - `shared/sample_layout.json` — example layout using the shared data format
 - `docs/` — product requirements, layout contract, demo notes, and evaluation results
-
-## Current limitations
-
-Walkthru is a design exploration tool, not a substitute for an architect, engineer, survey, permitting review, or code check. Its rules cover selected geometric and prompt requirements; they do not represent all accessibility, structural, environmental, or local building requirements.
-
-## License
-
-No license has been added yet. Contact the project maintainers before reusing this code outside the project.
