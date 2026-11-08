@@ -1,6 +1,8 @@
-# Prompt to paste into Claude
+# Identical prompt for ChatGPT and Claude
 
-Copy the text below into a **new Claude conversation**. Attach no BUILD layout JSON, screenshots, or source files. This makes the house design independent of BUILD's solver and this ChatGPT example.
+Copy the **exact same text below** into a new ChatGPT conversation and a new Claude conversation. Attach no BUILD layout JSON, screenshots, or source files to either. Use the same model settings, tools, and time allowance where the services let you control them. Save both responses and record any follow-up prompts.
+
+The ChatGPT scene already in this folder was made during a repository-aware coding task: ChatGPT saw the user's request for both an image and a runnable scene and inspected BUILD's example prompt, contracts, and demo material. It is an exploratory example, **not** the result of entering only the short house brief. Rerun ChatGPT with the text below for a controlled comparison with Claude.
 
 ```text
 I want to compare what you can make from one natural-language house brief against a separate home-design app. Work from this brief alone:

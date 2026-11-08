@@ -26,7 +26,7 @@
   <header><h1>Same brief, three outputs</h1><p>3 bed, 2 bath, open kitchen, home office, about 1,800 sq ft</p></header>
   <main>
     <section><div class="top"><h2>BUILD</h2><label>Choose screenshot <input type="file" accept="image/*" data-target="build"></label></div><div class="empty" id="build">Choose a screenshot of BUILD's 3D result</div><small>Record whether generation was live or cached.</small></section>
-    <section><div class="top"><h2>ChatGPT</h2><a href="./index.html" style="color:#e7d7af;font-size:12px">Open scene ↗</a></div><img src="./chatgpt-house-3d.png" alt="ChatGPT cutaway house rendering"><small>One-shot standalone scene; visual concept.</small></section>
+    <section><div class="top"><h2>ChatGPT</h2><label>Choose fresh result <input type="file" accept="image/*" data-target="chatgpt"></label></div><img id="chatgpt" src="./chatgpt-house-3d.png" alt="Exploratory ChatGPT cutaway house rendering"><small>Default image is exploratory. Choose a fresh result from the identical prompt for a controlled comparison.</small></section>
     <section><div class="top"><h2>Claude</h2><label>Choose screenshot <input type="file" accept="image/*" data-target="claude"></label></div><div class="empty" id="claude">Choose the image Claude generated from CLAUDE_PROMPT.md</div><small>Run Claude in a new conversation using the same brief.</small></section>
   </main>
   <script>
