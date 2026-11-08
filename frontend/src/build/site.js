@@ -90,6 +90,7 @@ const CSS = `
 .site-ov .ostat{font-size:11px;color:#6e6b65}
 .site-ov .gen{position:absolute;inset:0;z-index:8;display:grid;place-items:center;backdrop-filter:blur(18px) saturate(1.1);-webkit-backdrop-filter:blur(18px);background:rgba(12,14,20,.28);opacity:0;pointer-events:none;transition:opacity .7s}
 .site-ov .gen.on{opacity:1;pointer-events:auto}
+.site-ov.demo .shots{display:none!important}
 .site-ov .gen .gcard{color:#fff;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;text-shadow:0 1px 8px #0008}
 .site-ov .gen .gcard b{font-size:22px;font-weight:600;letter-spacing:-.01em}
 .site-ov .gen .gcard span{font-size:13px;opacity:.85}
@@ -112,6 +113,25 @@ const CSS = `
 `;
 
 let state = { label: "", lat: null, lon: null, rotationDeg: 0, orient: "street", flatten: true, ext: defaultExterior() };
+
+// Demo cache: a spin made once for one address (public/demo/<slug>/, see scripts/cut-demo-spin.py),
+// played back instead of generating photos + video: no Gemini call and no 2-minute wait on stage.
+const DEMOS = [{ match: /9708,?\s+valley\s+springs/i, dir: "/demo/valley-springs/" }];
+/** Short, stable key for a layout (recorded with a cached spin, to see which house it shows). */
+export function layoutKey(l) {
+  const parts = [l.footprint.width_ft, l.footprint.depth_ft, ...l.rooms.map((r) => `${r.id}:${r.x},${r.y},${r.w},${r.h}`)].join("|");
+  let h = 2166136261; for (let i = 0; i < parts.length; i++) { h ^= parts.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(36);
+}
+async function findDemo(label, layout) {
+  const d = DEMOS.find((x) => x.match.test(label || "")); if (!d) return null;
+  try {
+    const meta = await (await fetch(`${d.dir}meta.json`, { cache: "no-store" })).json();
+    // the live planner varies a little run to run, so the demo address always plays its saved spin
+    if (meta.layoutKey !== layoutKey(layout)) console.info(`demo spin was made from house ${meta.layoutKey}; this one is ${layoutKey(layout)}`);
+    return { ...meta, dir: d.dir };
+  } catch { return null; }
+}
 
 async function geocode(q) {
   // Server route (src/app/api/geocode): Google Geocoding when keyed, else Nominatim.
@@ -433,11 +453,46 @@ export async function openSiteView(layout) {
     makeSeamless(token);
   };
 
+  // --- demo: the cached spin, behind a short loading card, then straight into the 360 ---
+  const playDemo = async (demo) => {
+    const token = ++shotToken;
+    if (!seq?.cached) release(seq?.frames); seq = null; shotUrls.length = 0; shotsBusy = true; lastShotError = null;
+    ov.classList.add("demo"); $(".shots").hidden = true;
+    const bar = $(".gen .bar i"), LOAD_MS = 3200;
+    $(".gstat").textContent = "Rendering the photoreal 360°…"; bar.style.width = "4%";
+    if (!flight) $(".gen").classList.add("on"); // after the fly-in the card shows on its own
+    try {
+      // pre-joined frames (same ring the app builds from the clip), preloaded in parallel
+      const urls = Array.from({ length: demo.frames }, (_, i) => `${demo.dir}${demo.pattern.replace("%03d", String(i).padStart(3, "0"))}`);
+      const frames = await Promise.all(urls.map(async (u) => {
+        const im = new Image(); im.decoding = "async";
+        await new Promise((res, rej) => { im.onload = res; im.onerror = () => rej(new Error(`missing ${u}`)); im.src = u; });
+        return im;
+      }));
+      if (token !== shotToken || disposed) return;
+      // land the fly-in, then a short, steady "rendering" beat before the 360 appears
+      while (flight && !disposed) await new Promise((r) => setTimeout(r, 100));
+      $(".gen").classList.add("on"); bar.style.transition = `width ${LOAD_MS}ms ease-in-out`;
+      requestAnimationFrame(() => { bar.style.width = "100%"; });
+      await new Promise((r) => setTimeout(r, LOAD_MS));
+      bar.style.transition = "";
+      if (token !== shotToken || disposed) return;
+      seq = { frames, n: frames.length, cached: true };
+    } catch (err) {
+      console.warn("demo spin failed, generating live", err);
+      ov.classList.remove("demo");
+      if (token === shotToken) { shotsBusy = false; runShots(); }
+      return;
+    }
+    shotsBusy = false;
+    afterShots();
+  };
+
   // --- seamless spin: video clips between the photos, joined into one evenly spaced frame ring ---
   let seq = null; // { frames: [Image], n }
   const seamStat = (t) => { $(".seam").textContent = t; };
   const makeSeamless = async (token) => {
-    release(seq?.frames); seq = null;
+    if (!seq?.cached) release(seq?.frames); seq = null;
     if (!shotUrls[0]) { seamStat(""); return; }
     const live = () => token === shotToken && !disposed;
     try {
@@ -485,7 +540,7 @@ export async function openSiteView(layout) {
     return -1;
   };
   const enterSpin = (startShot = 0) => {
-    if (!shotUrls.some(Boolean)) return false;
+    if (!shotUrls.some(Boolean) && !seq) return false;
     spin = { pos: ringPos(startShot), vel: 0, target: ringPos(startShot), origin: ringPos(startShot) };
     controls.enabled = false;
     ov.classList.add("spinning");
@@ -573,7 +628,7 @@ export async function openSiteView(layout) {
   };
   const afterShots = () => {
     if (flight) return; // flight end will pick this up
-    if (!shotUrls.some(Boolean) && lastShotError) {
+    if (!shotUrls.some(Boolean) && !seq && lastShotError) {
       // nothing came back: say why on the loading card instead of silently dropping to the map
       const gen = $(".gen");
       gen.classList.add("on"); gen.querySelector(".ring").style.display = "none";
@@ -587,7 +642,7 @@ export async function openSiteView(layout) {
       return;
     }
     $(".gen").classList.remove("on");
-    if (shotUrls.some(Boolean)) enterSpin(0);
+    if (shotUrls.some(Boolean) || seq) enterSpin(0);
     else if (!spin) { controls.enabled = true; resetCamera(); }
   };
 
@@ -647,7 +702,10 @@ export async function openSiteView(layout) {
     $(".where").textContent = `${loc.label}\n${loc.lat.toFixed(5)}, ${loc.lon.toFixed(5)}`;
     exitSpin();
     // orient first (renders depend on it for lighting), but never wait more than ~7 s for OSM
-    Promise.race([autoOrient(loc, { snap }), new Promise((r) => setTimeout(r, 7000))]).then(scheduleShots);
+    ov.classList.remove("demo");
+    const demoP = findDemo(loc.label, layout);
+    Promise.race([autoOrient(loc, { snap }), new Promise((r) => setTimeout(r, 7000))])
+      .then(() => demoP).then((demo) => { if (disposed) return; if (demo) playDemo(demo); else scheduleShots(); });
     if (!tiles) return;
     reorient.lat = loc.lat * DEG; reorient.lon = loc.lon * DEG; // re-applied if the root tileset loads later
     reorient.transformLatLonHeightToOrigin(loc.lat * DEG, loc.lon * DEG, 0);
