@@ -2,6 +2,7 @@
 // Role 4: 2D SVG floor plan with names and dimensions. Also used (small) as the minimap.
 import { useMemo } from "react";
 import type { Layout, Point } from "@/lib/types";
+import { courtPlanSVG } from "@/build/roomRenderers";
 import { buildWalls } from "@/lib/walls";
 
 const FILL: Record<string, string> = {
@@ -36,6 +37,7 @@ export function PlanView({ layout, player, compact = false }: {
           )}
         </g>
       ))}
+      <g dangerouslySetInnerHTML={{ __html: layout.rooms.map(courtPlanSVG).join("") }} />
       {walls.map((s, i) => (
         <line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke="#222" strokeWidth={s.exterior ? 0.5 : 0.25} strokeLinecap="square" />
       ))}

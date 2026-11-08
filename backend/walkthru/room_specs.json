@@ -1,0 +1,92 @@
+{
+  "rooms": {
+    "bedroom": {
+      "min_side": 8,
+      "max_aspect": 2.5,
+      "preferred_aspect": 1.4
+    },
+    "primary_bedroom": {
+      "min_side": 9,
+      "max_aspect": 2.5,
+      "preferred_aspect": 1.4
+    },
+    "dining": {
+      "min_side": 8,
+      "max_aspect": 2.5,
+      "preferred_aspect": 1.4
+    },
+    "kitchen": {
+      "min_side": 7,
+      "max_aspect": 3,
+      "preferred_aspect": 1.4
+    },
+    "living": {
+      "min_side": 10,
+      "max_aspect": 3,
+      "preferred_aspect": 1.4
+    },
+    "workroom": {
+      "min_side": 9,
+      "max_aspect": 2.5,
+      "preferred_aspect": 1.4
+    },
+    "office": {
+      "min_side": 7,
+      "max_aspect": 2.5,
+      "preferred_aspect": 1.4
+    },
+    "bathroom": {
+      "min_side": 4,
+      "max_aspect": 3.5,
+      "preferred_aspect": 1.4
+    },
+    "laundry": {
+      "min_side": 4,
+      "max_aspect": 3,
+      "preferred_aspect": 1.4
+    },
+    "closet": {
+      "min_side": 2,
+      "max_aspect": 5,
+      "preferred_aspect": 1.4
+    },
+    "entry": {
+      "min_side": 3,
+      "max_aspect": 5,
+      "preferred_aspect": 1.4
+    },
+    "hall": {
+      "min_side": 3,
+      "max_aspect": 1000,
+      "preferred_aspect": 1.4
+    },
+    "basketball_court": {
+      "min_side": 30,
+      "max_aspect": 2.2,
+      "preferred_aspect": 1.88
+    }
+  },
+  "courts": {
+    "full": {
+      "length": 94.0,
+      "width": 50.0,
+      "room_length": 110.0,
+      "room_width": 60.0,
+      "height": 24.0
+    },
+    "half": {
+      "length": 47.0,
+      "width": 50.0,
+      "room_length": 57.0,
+      "room_width": 60.0,
+      "height": 24.0
+    },
+    "compact": {
+      "length": 40.0,
+      "width": 30.0,
+      "room_length": 50.0,
+      "room_width": 40.0,
+      "height": 20.0
+    }
+  }
+}

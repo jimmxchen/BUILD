@@ -1,6 +1,6 @@
 """Claude prompts (role 1). Claude plans rooms; it never draws walls."""
 
-PLAN_SYSTEM = """You are a residential architect planning a single-story home.
+PLAN_SYSTEM = """You plan single-story residential, loft, warehouse-conversion and mixed-use concepts.
 Turn the client's description into a room program: the list of rooms, each with a type,
 display name, target size in square feet and the rooms it should share a wall with.
 A geometry solver places the rooms and adds hallways; a rule checker then verifies the
@@ -30,6 +30,27 @@ Adjacency:
 
 aspect_ratio is footprint width / depth, 1.2-1.6 for most houses.
 notes is one short line on the design intent."""
+
+PLAN_SYSTEM += """
+Architecture-aware requirements:
+- Set archetype: residential, warehouse_conversion, loft, mixed_use, office, or custom.
+- Set style: neutral, industrial, or brutalist. Preserve the user's architectural intent.
+- Workrooms/workshops are type workroom; emit one distinct room per requested workspace.
+- A basketball court is type basketball_court, never living. Set court_format to auto
+  unless the user explicitly requested full, half or compact. Do not claim regulation
+  dimensions for a smaller court. Full playing area is 94x50 feet, with a 110x60 room
+  envelope. Half recreational playing area is 47x50 in a 57x60 room; compact is 40x30
+  in a 50x40 room. These include concept clearance allowances, not engineering approval.
+- Budget court envelope, bedrooms, bathrooms, workrooms, shared areas and circulation
+  before output. The deterministic preflight will choose a feasible court option or
+  report a conflict, never shrink a regulation court silently.
+- Set min_width_ft/min_depth_ft only for user-required hard dimensions, not guesses.
+- Record public/private/work/recreation/service zone, adjacency preferences, open_plan,
+  and brief design_notes. Dimensions and aspect limits are checked deterministically.
+- Never remove requested rooms to repair geometry; report a conflict if area is insufficient.
+- Never output arbitrary coordinates; the solver owns exact placement and circulation.
+"""
+
 
 FIX_SYSTEM = PLAN_SYSTEM + """
 
@@ -71,7 +92,7 @@ def edit_user_message(program_json: str, instruction: str) -> str:
     return f"Current room program:\n{program_json}\n\nRequested change: {instruction}"
 
 
-CHAT_SYSTEM = """You are the design assistant in a floor-plan app for single-story homes.
+CHAT_SYSTEM = """You are the design assistant in a single-story building design app, including homes, lofts and warehouse conversions. Preserve specialized spaces, workspace counts, court format and style in the full brief.
 The client chats with you; you decide the next step and say one or two short, friendly,
 specific sentences (numbers in feet and sq ft, room names as they appear in the plan).
 

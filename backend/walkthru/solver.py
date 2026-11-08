@@ -29,6 +29,9 @@ __all__ = ["solve", "solve_dict", "render_svg", "GRID", "HALL_W", "DOOR_W", "Pro
 
 def solve(program: RoomProgram, keep: Layout | None = None) -> Layout:
     """`keep`: the layout being edited; unchanged rooms stay where they were."""
+    if program.architecture_version >= 1:
+        from .geometry.zoned import solve as zoned_solve
+        return zoned_solve(program, keep)
     previous = keep.model_dump(by_alias=True) if keep is not None else None
     prog = program.model_dump()
     if keep is not None and not prog.get("footprint"):

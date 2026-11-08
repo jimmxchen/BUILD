@@ -132,7 +132,7 @@ function mountHouse(L) {
   // warm room lights, only on during the walkthrough
   roomLights = L.rooms.map((r) => {
     const l = new THREE.PointLight(0xffd6a0, 0, Math.max(r.w, r.h) + 10, 1.2);
-    l.position.copy(house.roomCenter(r.id)).setY(7.2); house.group.add(l); return l;
+    l.position.copy(house.roomCenter(r.id)).setY((L.ceiling_ft ?? 9) - 1.5); house.group.add(l); return l;
   });
   walker?.dispose();
   walker = createWalker(camera, canvas, L, { extraBoxes: furn.boxes });
@@ -177,7 +177,7 @@ function pulse(roomId) {
 
 // ---------- camera rig ----------
 // camera distance scales with the generated footprint (the default 3-bed is ~68 ft wide)
-const houseFit = () => Math.max(0.75, Math.min(1.35, Math.hypot(layout.footprint.width_ft, layout.footprint.depth_ft) / 70));
+const houseFit = () => Math.max(0.75, Math.hypot(layout.footprint.width_ft, layout.footprint.depth_ft) / 70);
 const LANDING = { theta: 0.6, radius: 218, height: 40, spin: 0.05, ty: -38 };
 const rig = { theta: LANDING.theta, radius: LANDING.radius, height: LANDING.height, spin: LANDING.spin, target: new THREE.Vector3(0, LANDING.ty, 0) };
 // portrait phones: back the camera off so the whole footprint stays in frame
@@ -426,9 +426,13 @@ async function requestPlan(prompt) {
     const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 120000);
     const r = await fetch(`${API}/api/generate`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompt }), signal: ctl.signal });
     clearTimeout(timer);
-    if (!r.ok) throw new Error(`generate ${r.status}`);
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      const error = new Error(body.detail ?? `generate ${r.status}`); error.conflict = r.status === 422; throw error;
+    }
     return planFromResponse(prompt, await r.json());
   } catch (err) {
+    if (err.conflict || /basketball|warehouse|work\s*room|workshop|loft|mixed.use/i.test(prompt)) throw err;
     console.warn("planner unreachable, using the built-in planner", err);
     const p = generate(prompt); p.offline = true; return p;
   }
@@ -449,7 +453,7 @@ let waitTimer = 0;
 async function start(prompt) {
   if (diving || run) return;
   promptText = prompt;
-  const pending = requestPlan(prompt); // in flight during the dive
+  const pending = requestPlan(prompt).catch(error => ({ failure: error })); // in flight during the dive
   resetHouse(); fixLog = [];
   $("#tray").innerHTML = ""; $("#rules").innerHTML = ""; $("#thought").textContent = ""; $("#ruleCount").textContent = "";
   diving = true; document.body.classList.add("leaving");
@@ -481,6 +485,11 @@ async function start(prompt) {
   const nextLine = () => { typeLine(lines[Math.min(li, lines.length - 1)]); li++; waitTimer = setTimeout(nextLine, li < lines.length ? 2300 : 6000); };
   nextLine();
   plan = await pending;
+  if (plan.failure) {
+    setState("landing"); document.body.classList.remove("waiting", "leaving");
+    toast(plan.failure.message); $("#clarify").hidden = false; $("#clarifyQ").textContent = plan.failure.message;
+    $("#clarifyOpts").replaceChildren(); return;
+  }
   clearTimeout(waitTimer); document.body.classList.remove("waiting");
   // the island grows to the real footprint, the house is built hidden, then the story plays it in
   mountIsland(plan.layout); mountHouse(plan.layout); resetHouse();
@@ -539,7 +548,9 @@ function finish(stats) {
   // settle into a high three-quarter view so the furnished rooms read over the walls
   rig.target.set(0, 0, 0); controls.target.set(0, 0, 0);
   const r0 = rig.radius, h0 = rig.height, fit = houseFit();
-  controls.maxDistance = 170 * fit;
+  controls.maxDistance = 220 * fit;
+  camera.far = Math.max(900, 700 * fit); camera.updateProjectionMatrix();
+  scene.fog.near = 250 * fit; scene.fog.far = 560 * fit;
   tween(T(1400), (k) => { rig.radius = r0 + (112 * fit - r0) * k; rig.height = h0 + (104 * fit - h0) * k; placeCam(); }, ease.settle)
     .then(() => { controls.enabled = true; controls.autoRotate = !reduce; controls.update(); if (furnDrag) furnDrag.enabled = true; });
 }
@@ -620,6 +631,11 @@ async function applyEdit(instr) {
   // the planner changed something: show it. If it kept the layout (e.g. the backend runs offline without
   // Claude), fall through to the local resize so the request still does what it says.
   if (remote?.changed.length) return animateEdit(remote);
+  if (layout.architecture_version) {
+    msg.className = "editmsg warn";
+    msg.textContent = "The planner could not validate this change. The existing plan is preserved; retry when the service is available or adjust the request.";
+    return;
+  }
   // core's editLayout matches a room *type* ("bedroom") before a specific name ("bedroom 3");
   // put an exactly named room first so it wins, then restore the original room order.
   const low = instr.toLowerCase();
@@ -860,6 +876,7 @@ function localChat(messages, withHouse) {
       const dir = /smaller|narrower|shrink/.test(low) ? "smaller" : "bigger";
       return { action: "ask", reply: `Which room should get ${dir}?`, options: big.map((r) => `Make the ${r.name.toLowerCase()} ${dir}`) };
     }
+    if (layout.architecture_version) return { action: "answer", reply: "This plan needs a validated server edit. The service is unavailable; your current geometry is preserved.", options: [] };
     const res = editLayout(layout, low);
     if (res) return { action: "edit", reply: res.note, options: [], local: res };
     return { action: "answer", reply: `I couldn't resize ${room.name} without breaking a neighbouring room. Try a different room, or ask for a new plan.`, options: [] };
@@ -905,7 +922,7 @@ async function sendChat(text) {
     let r = res.local ?? (res.result ? editFromResponse(res.result) : null);
     // the planner kept the layout (e.g. offline backend): resize locally so the request still lands
     // (a tapped answer like "Kitchen" is read together with the request it answers: "make it bigger")
-    if (r && !r.changed.length) {
+    if (r && !r.changed.length && !layout.architecture_version) {
       const intent = convo.filter((m) => m.role === "user").slice(-2).map((m) => m.content).join(" ");
       const loc = editLayout(layout, text) ?? editLayout(layout, intent);
       if (loc) { r = loc; addMsg("note", `Resized locally while the live planner is offline: ${loc.note}`); }
@@ -931,6 +948,7 @@ function openChat(stats) {
     + `${stats.rounds ? `, and fixed ${stats.rounds} rule failure round${stats.rounds === 1 ? "" : "s"} on the way` : ""}. What would you like to change? I'll re-check every rule after each change.`;
   addMsg("agent", intro, { meta: `${stats.rulesPassed} of ${stats.rules ?? 7} layout rules pass` });
   convo.push({ role: "assistant", content: intro });
+  for (const note of layout.design_notes ?? []) { addMsg("note", note); convo.push({ role:"assistant", content:note }); }
   setOptions(suggestions(), "suggest");
 }
 // panel tabs

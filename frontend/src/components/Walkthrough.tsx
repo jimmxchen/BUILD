@@ -21,9 +21,11 @@ function Walls({ layout }: { layout: Layout }) {
       {segs.map((s, i) => {
         const len = Math.hypot(s.x2 - s.x1, s.y2 - s.y1);
         const horiz = s.y1 === s.y2;
+        const height = layout.ceiling_ft ?? WALL_HEIGHT_FT;
+        const thickness = s.thickness ?? WALL_THICKNESS_FT;
         return (
-          <mesh key={i} position={[(s.x1 + s.x2) / 2, WALL_HEIGHT_FT / 2, (s.y1 + s.y2) / 2]}>
-            <boxGeometry args={horiz ? [len + WALL_THICKNESS_FT, WALL_HEIGHT_FT, WALL_THICKNESS_FT] : [WALL_THICKNESS_FT, WALL_HEIGHT_FT, len + WALL_THICKNESS_FT]} />
+          <mesh key={i} position={[(s.x1 + s.x2) / 2, height / 2, (s.y1 + s.y2) / 2]}>
+            <boxGeometry args={horiz ? [len, height, thickness] : [thickness, height, len]} />
             <meshStandardMaterial color={s.exterior ? "#d8d4cc" : "#f2efe9"} />
           </mesh>
         );

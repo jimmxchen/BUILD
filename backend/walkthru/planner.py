@@ -121,6 +121,8 @@ def rescale(program: RoomProgram) -> RoomProgram:
     Pure arithmetic, so it's cheaper to do here than to spend a Claude round on it.
     Rooms keep their relative sizes; each target is rounded to 5 sq ft.
     """
+    if program.architecture_version >= 1 or any(r.type == 'basketball_court' or 'basketball' in r.name.lower() for r in program.rooms):
+        return program  # specialized dimensions must never be silently scaled
     total = sum(r.target_sqft for r in program.rooms)
     if total <= 0 or program.requested_sqft <= 0:
         return program
@@ -189,7 +191,9 @@ def plan(prompt: str) -> RoomProgram:
     req = requirements.parse(prompt)
     program = _parse(prompts.PLAN_SYSTEM, prompts.plan_user_message(prompt, req.describe()), RoomProgram)
     program = _with_requirements(tidy(program), req)
-    return _repair(program, req, preflight(program, req))
+    repaired = _repair(program, req, preflight(program, req))
+    from .architecture import prepare
+    return prepare(repaired, prompt)
 
 
 def fix(program: RoomProgram, failures: list[str]) -> RoomProgram:
@@ -198,7 +202,12 @@ def fix(program: RoomProgram, failures: list[str]) -> RoomProgram:
     req = requirements_of(program)
     msg = prompts.fix_user_message(program.model_dump_json(indent=2), failures, req.describe())
     fixed = _with_requirements(tidy(_parse(prompts.FIX_SYSTEM, msg, RoomProgram)), req)
-    return _repair(fixed, req, preflight(fixed, req))
+    fixed = _repair(fixed, req, preflight(fixed, req))
+    if program.architecture_version >= 1:
+        from .architecture import prepare
+        fixed.architecture_version, fixed.archetype, fixed.style = 1, program.archetype, program.style
+        return prepare(fixed)
+    return fixed
 
 
 def edit(program: RoomProgram, instruction: str) -> RoomProgram:
@@ -223,9 +232,15 @@ def edit(program: RoomProgram, instruction: str) -> RoomProgram:
         half_baths=c.half_baths if old.full_baths is not None else None,
         offices_min=c.offices if old.offices_min is not None else None,
         sqft=edited.requested_sqft if old.sqft is not None else None,
+        workrooms_min=old.workrooms_min, courts_min=old.courts_min,
     )
     edited = _with_requirements(tidy(edited), req)
-    return _repair(edited, req, preflight(edited, req))
+    edited = _repair(edited, req, preflight(edited, req))
+    if program.architecture_version >= 1:
+        from .architecture import prepare
+        edited.architecture_version, edited.archetype, edited.style = 1, program.archetype, program.style
+        return prepare(edited, instruction)
+    return edited
 
 
 def keep_untouched(before: RoomProgram, after: RoomProgram, changed: set[str]) -> RoomProgram:
