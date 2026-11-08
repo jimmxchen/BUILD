@@ -119,7 +119,7 @@ html:has(.bl) { scroll-snap-type: y proximity; }
 .bl-problem-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: clamp(32px, 6vw, 96px); align-items: center; }
 /* Larger problem copy on one clean white surface, without card outlines or dividers. */
 .bl-fails { list-style: none; display: grid; gap: 24px; background: #fff; border-radius: 14px; padding: 26px 30px; }
-.bl-fail b { display: block; font-size: 21px; letter-spacing: -0.015em; line-height: 1.25; margin-bottom: 7px; }
+.bl-fail b { display: block; color: var(--leaf-800); font-size: 21px; letter-spacing: -0.015em; line-height: 1.25; margin-bottom: 7px; }
 .bl-fail span { display: block; color: var(--muted); font-size: 17px; line-height: 1.55; }
 
 /* ---------------- scale ---------------- */
