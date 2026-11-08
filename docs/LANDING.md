@@ -16,7 +16,7 @@ npm run build
 ## Sections (one screen each, scroll-snapped, dot navigation on the right)
 
 1. **Intro**: the sample house on the app's floating island, headline, the app's prompt bar.
-2. **The problem**: three pain points in restrained green cards.
+2. **The problem**: three pain points in one white panel with neutral dividers.
 3. **Who needs this**: four verified figures (below).
 4. **Our solution**: three steps, the 30-prompt eval result, and the app's stepper pills and
    rule cards replaying the build of the sample plan.
@@ -30,7 +30,7 @@ ink, muted, line colours, the sky gradient, cloud sprites, white panels, the
 island palette (`ISLAND_LOOK`). The app's cobalt is replaced by the island greens. The logo is the app's
 lockup (`MARK_PATH` + "uild") with the mark in green. Styles: `src/app/landing.css`, scoped to `.bl`.
 The presentation headings stand on their own without numbered section kickers; the three problem
-cards use a quiet green surface and a slim left rule.
+points share the same white surface, neutral border and dividers as the stats panel.
 
 `IsoHouse.tsx` draws the sample layout (`src/lib/sample-layout.json`, real solver output) as an SVG
 axonometric on a low-poly island. Walls come from `lib/walls.ts`; one CSS custom property (`--rise`)
