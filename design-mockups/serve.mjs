@@ -262,75 +262,55 @@ async function evenSpeedIndices(file, count) {
   return out;
 }
 
-// --- one-clip orbit: a free 3D-model turntable (rendered in the browser) is the motion guide, and
-// Omni repaints it as the real house from the hero photo. One 10 s call covers the whole 360, so
-// there are no joins between clips; at 360p that is ~19k output tokens (~$0.34).
-async function startOrbit(req, res) {
+// --- one-clip orbit (stateless, so the Next/Vercel port is the same two routes): the browser renders
+// the 3D model wearing the photos orbiting once, encodes it as a small guide mp4 (core/orbitvideo.js),
+// and posts it here. Omni repaints it photoreal at ORBIT_RES and leaves the clip as a Gemini file;
+// the browser pulls it back in slices through /api/orbit/video and splits it into frames itself.
+const ORBIT_PROMPT = "Restyle this 10-second 3D architectural animation as a photorealistic architectural visualization of the same house. " +
+  "Keep the camera motion exactly as in the video: one smooth orbit all the way around the house at constant speed, same height and distance, ending where it started. " +
+  "Keep the house shape, size and position in the frame exactly as in the video. " +
+  "Keep the house's siding, trim, roof, windows, doors and colors as shown, made photorealistic. Add a real green lawn, mature trees and softly out-of-focus neighboring houses, consistent all the way round, in late-afternoon light. " +
+  "High detail and sharp focus on the house: crisp siding lines, trim, window frames and glass reflections, clean roof edges, true straight walls; stable, no flicker or shimmer. " +
+  "Replace the plain gray backdrop and ground with that real yard and neighborhood. Nothing moves except the camera. No cuts, no zoom, no morphing, no people, no cars, no text.";
+const GEMINI = "https://generativelanguage.googleapis.com/v1beta";
+
+async function orbit(req, res) {
   if (!KEY) return send(res, 503, { error: "No GEMINI_API_KEY" });
-  const { frames, hero, prompt = "" } = await readBody(req, 60 * 1024 * 1024);
-  const img = (f) => typeof f === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(f);
-  if (!Array.isArray(frames) || frames.length < 48 || frames.length > 300 || !frames.every(img) || (hero != null && !img(hero)) || typeof prompt !== "string" || prompt.length > 3000) {
-    return send(res, 400, { error: "Expected { frames: 48-300 data URLs (one full orbit), hero?: data URL, prompt? }" });
+  const t0 = Date.now();
+  const { video } = await readBody(req, 6 * 1024 * 1024);
+  const m = typeof video === "string" && video.match(/^data:video\/mp4;base64,(.+)$/);
+  if (!m || m[1].length > 5.5e6) return send(res, 400, { error: "Expected { video: mp4 data URL under 4 MB }" });
+  const r = await fetch(`${GEMINI}/interactions`, {
+    method: "POST", headers: { "x-goog-api-key": KEY, "Content-Type": "application/json" }, signal: AbortSignal.timeout(280000),
+    body: JSON.stringify({ model: OMNI_MODEL, input: [{ type: "video", mime_type: "video/mp4", data: m[1] }, { type: "text", text: ORBIT_PROMPT }],
+      response_format: { type: "video", resolution: ORBIT_RES, aspect_ratio: "16:9", delivery: "uri" } }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const msg = (Array.isArray(d) ? d[0] : d)?.error?.message || `Omni HTTP ${r.status}`;
+    return send(res, 502, { error: r.status === 402 ? "Gemini prepaid credits are used up: top up in AI Studio" : msg });
   }
-  const id = createHash("sha1").update(JSON.stringify(["orbit", frames, hero, prompt, ORBIT_RES, OMNI_MODEL])).digest("hex").slice(0, 16);
-  const dir = join(SPIN_DIR, id);
-  if (existsSync(join(dir, "done.json"))) return send(res, 200, { id, ...JSON.parse(readFileSync(join(dir, "done.json"), "utf8")), status: "done" });
-  if (!spinJobs.has(id) || spinJobs.get(id).status === "error") {
-    const job = { status: "running", done: 0, total: 1, n: 0, error: null };
-    spinJobs.set(id, job);
-    buildOrbit(id, dir, frames, hero, prompt, job).catch((e) => { job.status = "error"; job.error = String(e.message || e); console.error("orbit", id, e); });
-  }
-  send(res, 200, { id, ...spinJobs.get(id) });
+  const uri = (d.steps ?? []).flatMap((st) => st.content ?? []).find((c) => c?.type === "video" && c.uri)?.uri;
+  const file = uri?.match(/\/files\/([a-z0-9-]+):download/)?.[1];
+  if (!file) return send(res, 502, { error: "Omni returned no video" });
+  const head = await fetch(`${GEMINI}/files/${file}:download?alt=media`, { headers: { "x-goog-api-key": KEY, Range: "bytes=0-0" } });
+  const size = Number(head.headers.get("content-range")?.split("/")[1]);
+  await head.body?.cancel();
+  if (!size) return send(res, 502, { error: "orbit clip has no size" });
+  console.log(`orbit: ${d.usage?.total_output_tokens ?? "?"} output tokens, ${(size / 1e6).toFixed(1)} MB, ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+  send(res, 200, { file, size });
 }
 
-async function buildOrbit(id, dir, frames, hero, prompt, job) {
-  const t0 = Date.now();
-  await mkdir(dir, { recursive: true });
-  const guide = join(dir, "guide.mp4"), out = join(dir, "orbit.mp4");
-  if (!existsSync(out)) {
-    const g = join(dir, "g"); await rm(g, { recursive: true, force: true }); await mkdir(g);
-    await Promise.all(frames.map((f, i) => writeFile(join(g, `g_${String(i + 1).padStart(4, "0")}.jpg`), Buffer.from(f.split(",")[1], "base64"))));
-    await run("ffmpeg", ["-loglevel", "error", "-y", "-framerate", String(frames.length / 10), "-i", join(g, "g_%04d.jpg"),
-      "-vf", "scale=960:540,format=yuv420p", "-r", "24", "-c:v", "libx264", "-crf", "18", guide]);
-    console.log(`orbit ${id}: guide encoded in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
-    await rm(g, { recursive: true, force: true });
-    const text = (hero ? "Turn this plain 3D-model turntable video into real 10-second drone footage of the house in <IMAGE_REF_0>. "
-      : "Restyle this 10-second 3D architectural animation as a photorealistic architectural visualization of the same house. ") +
-      "Keep the camera motion exactly as in the video: one smooth orbit all the way around the house at constant speed, same height and distance, ending where it started. " +
-      "Keep the house shape, size and position in the frame exactly as in the video. " +
-      (hero ? "Its siding, trim, roof, windows, doors, porch, landscaping, trees, lawn, neighboring houses and late-afternoon light match the photo and stay consistent all the way round. "
-        : "Keep the house's siding, trim, roof, windows, doors and colors as shown, made photorealistic. Add a real green lawn, mature trees and softly out-of-focus neighboring houses, consistent all the way round, in late-afternoon light. ") +
-      "High detail and sharp focus on the house: crisp siding lines, trim, window frames and glass reflections, clean roof edges, true straight walls; stable, no flicker or shimmer. " +
-      "Replace the plain gray backdrop and ground with that real yard and neighborhood. Nothing moves except the camera. No cuts, no zoom, no morphing, no people, no cars, no text." +
-      (prompt ? ` ${prompt}` : "");
-    const vid = { type: "video", mime_type: "video/mp4", data: (await readFile(guide)).toString("base64") };
-    const t1 = Date.now();
-    await writeFile(out, await omniCall([vid, ...(hero ? [imagePart(hero)] : []), { type: "text", text }], ORBIT_RES));
-    console.log(`orbit ${id}: Omni ${ORBIT_RES} clip in ${((Date.now() - t1) / 1000).toFixed(1)} s`);
+async function orbitVideo(res, url) {
+  const f = url.searchParams.get("f") ?? "", a = Number(url.searchParams.get("start")), b = Number(url.searchParams.get("end"));
+  if (!/^[a-z0-9-]{4,64}$/.test(f) || !Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < a || b - a >= 4 * 1024 * 1024) {
+    return send(res, 400, { error: "Expected ?f=<file>&start=<byte>&end=<byte> (under 4 MB)" });
   }
-  const cut = await hardCut(out);
-  const tmp = join(dir, "tmp"); await rm(tmp, { recursive: true, force: true }); await mkdir(tmp);
-  await run("ffmpeg", ["-loglevel", "error", "-i", out, "-vf", "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720", "-q:v", "6", join(tmp, "s_%04d.jpg")]);
-  const src = (await readdir(tmp)).filter((x) => x.endsWith(".jpg")).sort();
-  // The model rarely lands exactly back on its first view, so close the loop with a time overlap:
-  // the ring starts K frames in, and its last K frames cross-fade into the clip's first K frames.
-  // Wrapping from the end of the ring to its start is then continuous (a 1 s blend, never a jump).
-  const { stderr } = await run("ffmpeg", ["-hide_banner", "-i", join(tmp, src[0]), "-i", join(tmp, src[src.length - 1]), "-lavfi", "[0]scale=320:180[x];[1]scale=320:180[y];[x][y]ssim", "-f", "null", "-"]);
-  const loop = Number(stderr.match(/All:([\d.]+)/)?.[1] ?? 0);
-  const K = 24, n = src.length - K;
-  for (let j = 0; j < n; j++) {
-    const to = join(dir, `f_${String(j + 1).padStart(4, "0")}.jpg`), i = K + j, m = i - n; // m >= 0: inside the overlap
-    if (m < 0) { await run("cp", [join(tmp, src[i]), to]); continue; }
-    const t = ((m + 1) / (K + 1)).toFixed(3);
-    await run("ffmpeg", ["-loglevel", "error", "-y", "-i", join(tmp, src[i]), "-i", join(tmp, src[m]),
-      "-filter_complex", `[0][1]blend=all_expr='A*(1-${t})+B*${t}'`, "-q:v", "6", "-update", "1", to]);
-  }
-  await rm(tmp, { recursive: true, force: true });
-  console.log(`orbit ${id}: ${n} frames, hard cut ${cut ? cut.toFixed(2) : "none"}, loop match ${loop.toFixed(2)}`);
-  const meta = { n, total: 1, done: 1, clips: 1, mode: "orbit", cut, loop, resolution: ORBIT_RES, seconds: Math.round((Date.now() - t0) / 1000) };
-  console.log(`orbit ${id}: done in ${meta.seconds} s total`);
-  await writeFile(join(dir, "done.json"), JSON.stringify(meta));
-  Object.assign(job, meta, { status: "done" });
+  const r = await fetch(`${GEMINI}/files/${f}:download?alt=media`, { headers: { "x-goog-api-key": KEY, Range: `bytes=${a}-${b}` } });
+  if (!r.ok) return send(res, 502, { error: `Gemini file HTTP ${r.status}` });
+  const buf = Buffer.from(await r.arrayBuffer());
+  res.writeHead(200, { "Content-Type": "video/mp4", "Content-Length": buf.length, "Cache-Control": "private, max-age=86400" });
+  res.end(buf);
 }
 
 async function buildSpin(id, dir, frames, prompt, job) {
@@ -395,7 +375,8 @@ createServer(async (req, res) => {
     if (url.pathname === "/api/render" && req.method === "POST") return await render(req, res);
     if (url.pathname === "/api/osm") return await osm(req, res, url);
     if (url.pathname === "/api/spin" && req.method === "POST") return await startSpin(req, res);
-    if (url.pathname === "/api/orbit" && req.method === "POST") return await startOrbit(req, res);
+    if (url.pathname === "/api/orbit" && req.method === "POST") return await orbit(req, res);
+    if (url.pathname === "/api/orbit/video") return await orbitVideo(res, url);
     if (url.pathname.startsWith("/api/spin/")) return spinStatus(res, url.pathname.slice(10));
     if (url.pathname === "/api/render/status") return send(res, 200, { ready: Boolean(KEY), model: MODEL, lite: LITE_MODEL, video: OMNI_MODEL });
     let path = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, "");

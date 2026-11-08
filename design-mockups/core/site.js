@@ -21,6 +21,7 @@ import { BRAND } from "./core.js";
 import { STYLES, defaultExterior, buildExteriorHouse, parseExteriorPrompt } from "./exterior.js";
 import { ProjectionSkin } from "./projskin.js";
 import { neighborhoodOrientation, houseRotation } from "./orient.js";
+import { encodeGuide, filmOrbit, downloadOrbit, ringFrames, release } from "./orbitvideo.js";
 
 const TILES_VERSION = "0.5.4";
 const TILES_CDN = `https://cdn.jsdelivr.net/npm/3d-tiles-renderer@${TILES_VERSION}/build`;
@@ -314,7 +315,7 @@ export async function openSiteView(layout) {
   let shotToken = 0, shotTimer = 0, renderReady = null, shotsBusy = false, lastShotError = null;
   const shotEls = [...ov.querySelectorAll(".shot")];
   const shotUrls = [];
-  const captureAngles = (shots = SHOTS, { w = 1024, h = 576, projectors = true, skinned = false } = {}) => {
+  const captureAngles = (shots = SHOTS, { w = 1024, h = 576, projectors = true, skinned = false, each = null } = {}) => {
     const wasSkinned = skin.enabled;
     const { width_ft: W, depth_ft: D } = layout.footprint, e = layout.entrance;
     const y = groundY ?? 0, th = houseRoot.rotation.y;
@@ -343,6 +344,7 @@ export async function openSiteView(layout) {
       cam.position.set(center.x + Math.sin(a) * Math.cos(el) * r, Math.max(y + 1.6, center.y + Math.sin(el) * r), center.z + Math.cos(a) * Math.cos(el) * r);
       cam.lookAt(center.x, center.y - (s.elev > 10 ? 1 : 0.5), center.z); cam.updateMatrixWorld();
       renderer.render(scene, cam);
+      if (each) { each(renderer.domElement, i); return null; } // e.g. straight into a video encoder
       const url = renderer.domElement.toDataURL("image/jpeg", 0.9); // read back in the same task as the render
       if (projectors && skinSlot(i) >= 0) skin.captureProjector(skinSlot(i), cam, w, h); // this exact camera becomes a projector
       return url;
@@ -435,41 +437,36 @@ export async function openSiteView(layout) {
   let seq = null; // { frames: [Image], n }
   const seamStat = (t) => { $(".seam").textContent = t; };
   const makeSeamless = async (token) => {
-    seq = null;
+    release(seq?.frames); seq = null;
     if (!shotUrls[0]) { seamStat(""); return; }
+    const live = () => token === shotToken && !disposed;
     try {
+      // one clip for the whole turn: our 3D model wearing the photos (projection skin) orbits once,
+      // the browser encodes that as a guide video, and Gemini Omni repaints it photoreal (see orbitvideo.js)
       seamStat("Filming the 360° orbit…");
-      // one clip for the whole turn: our 3D model wearing the photos (projection skin), orbiting; Omni makes it real
-      let r = await fetch("/api/orbit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ frames: orbitFrames(240) }) });
-      let job = await r.json();
-      while (token === shotToken && !disposed && job.status === "running") {
-        seamStat(`Filming the 360° orbit…`);
-        await new Promise((res) => setTimeout(res, 2500));
-        job = await (await fetch(`/api/spin/${job.id}`)).json();
-      }
-      if (token !== shotToken || disposed) return;
-      if (job.status !== "done") throw new Error(job.error || "video failed");
+      const t0 = performance.now();
+      const guide = await encodeGuide((each) => orbitFrames(240, each), { width: 960, height: 540 });
+      if (!live()) return;
+      const job = await filmOrbit(guide);
+      if (!live()) return;
       seamStat("Loading the seamless spin…");
-      const base = `/renders/spin/${job.id}/f_`; // absolute: the page lives in a subfolder
-      const frames = Array.from({ length: job.n }, (_, i) => { const im = new Image(); im.decoding = "async"; im.src = `${base}${String(i + 1).padStart(4, "0")}.jpg`; return im; });
-      // decode everything before switching, so the first drag never hits a blank frame
-      let ready = 0;
-      let failed = 0;
-      await Promise.all(frames.map((im) => im.decode().catch(() => { failed++; }).then(() => { ready++; if (ready % 40 === 0) seamStat(`Loading the seamless spin… ${Math.round((ready / frames.length) * 100)}%`); })));
-      if (failed) throw new Error(`${failed} of ${frames.length} frames did not load`); // never switch to a black spin
-      if (token !== shotToken || disposed) return;
+      const clip = await downloadOrbit(job);
+      if (!live()) return;
+      const frames = await ringFrames(clip, { onProgress: (f) => live() && seamStat(`Loading the seamless spin… ${Math.round(f * 100)}%`) });
+      if (!live()) { release(frames); return; }
       seq = { frames, n: frames.length };
+      console.log(`seamless spin: ${frames.length} frames in ${Math.round((performance.now() - t0) / 1000)} s`);
       seamStat("");
       if (spin) { spin.shown = -1; frameEls[1].style.opacity = 0; }
     } catch (err) {
-      if (token === shotToken) seamStat(`Seamless spin unavailable (${String(err.message || err).slice(0, 80)}); showing photos.`);
+      if (live()) seamStat(`Seamless spin unavailable (${String(err.message || err).slice(0, 80)}); showing photos.`);
     }
   };
   $(".skin").addEventListener("change", (e) => skin.enable(e.target.checked));
   ov.seamless = () => makeSeamless(shotToken); // dev hook: rebuild the seamless spin from the current photos
   // A full 360 orbit of the plain 3D model, same camera path as the photos (free: rendered locally).
   // It is the motion guide for the one-clip photoreal orbit (/api/orbit).
-  const orbitFrames = (n = 240) => captureAngles(Array.from({ length: n }, (_, k) => ({ off: 30 + (k * 360) / n, elev: 8, fill: 0.68 })), { w: 960, h: 540, projectors: false, skinned: true });
+  const orbitFrames = (n = 240, each = null) => captureAngles(Array.from({ length: n }, (_, k) => ({ off: 30 + (k * 360) / n, elev: 8, fill: 0.68 })), { w: 960, h: 540, projectors: false, skinned: true, each });
   ov.orbitFrames = orbitFrames; // dev hook
   const scheduleShots = () => { if (disposed) return; clearTimeout(shotTimer); shotTimer = setTimeout(() => { if (!disposed) runShots(); }, 400); };
   $(".rerender").addEventListener("click", runShots);
