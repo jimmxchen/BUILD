@@ -1,67 +1,51 @@
-# BUILD landing page
+# BUILD landing page (presentation intro)
 
-The public product story lives at `/welcome`. The existing application stays at `/`;
-all Try BUILD and Launch BUILD links open that same-origin application. No external
-production URL is assumed, and no backend is required to view the landing page.
+`/` is the landing page: a short intro to present before the live demo. The app moved to `/app`;
+`/welcome` redirects to `/`. Every "Build it" / "Open the demo" link goes to `/app` (override with
+`NEXT_PUBLIC_APP_URL`). The page needs no backend and makes no LLM call.
 
 From `frontend/`:
 
 ```sh
 npm ci
-npm run dev
-# Open http://localhost:3000/welcome
-npx eslint src/components/landing src/app/welcome scripts/check-landing-path.mjs
-npx tsc --noEmit
-node scripts/check-landing-path.mjs
-npm run build -- --webpack
+npm run dev        # http://localhost:3000 (landing), http://localhost:3000/app (app)
+npx eslint src/components/landing src/app
+npm run build
 ```
 
-Run the build before a standalone type check on a fresh checkout, so Next generates
-its route types. The existing app needs its normal API configuration for generation.
+## Sections (one screen each, scroll-snapped, dot navigation on the right)
 
-## Selected visual direction
+1. **Intro**: the sample house on the app's floating island, headline, the app's prompt bar.
+2. **The problem**: three pain points in restrained green cards.
+3. **Who needs this**: four verified figures (below).
+4. **Our solution**: three steps, the 30-prompt eval result, and the app's stepper pills and
+   rule cards replaying the build of the sample plan.
+5. **Into the demo**: "Let's build one." and the prompt bar into `/app`.
 
-The landing page follows option 2, **Site model**, from
-`design-mockups/index.html` and `design-mockups/02-site-model/index.html`.
-This is also the existing app rendered by `SiteModel.tsx`. Its visual identity
-combines a light green floating island, sky backdrop, warm paper, Hanken Grotesk,
-rounded white panels and cobalt actions. The landing hero uses a model-first
-composition with a rounded CTA bar; supporting sections use the same calm palette.
-Only landing files change. The app default, shared renderer and app UI remain intact.
+## Visual system
 
-## Implementation
+All from the Site model app (`src/app/site-model.css`, `src/build/siteModelApp.js`): paper `#F6F5F1`,
+ink, muted, line colours, the sky gradient, cloud sprites, white panels, the
+`.prompt` bar, `.ghost` button, `.stepper` pills, `.rule` cards, Hanken Grotesk, and the
+island palette (`ISLAND_LOOK`). The app's cobalt is replaced by the island greens. The logo is the app's
+lockup (`MARK_PATH` + "uild") with the mark in green. Styles: `src/app/landing.css`, scoped to `.bl`.
+The presentation headings stand on their own without numbered section kickers; the three problem
+cards use a quiet green surface and a slim left rule.
 
-- `src/app/welcome/page.tsx` and `welcome.css`: isolated route, metadata and scoped
-  responsive styles. The `:has(.lp)` overflow override only applies on this route.
-- `src/components/landing/Landing.tsx`: narrative, original uncropped 2:1 logo,
-  preview toggle, sourced statistics, semantic navigation, manual tour controls.
-- `HouseScene.tsx`: React Three Fiber scene, original wall builder, room floors,
-  real window/door openings and illustrative furnishings. Reuses the existing
-  `createFloatingIsland` export from `src/build/atmosphere.js` with the app’s exact
-  landscape colors. The island is mounted and its geometry/materials explicitly
-  disposed by the landing component. Rendering runs on demand,
-  DPR is capped at 1.5, and R3F disposes declarative geometry/materials on unmount.
-- `geometry.ts`: actual bundled sample and eight camera keyframes in feet.
-  Smoothstep interpolation stays within doorway-aligned segments. The camera
-  descends outside the house, then enters at 5.5 ft eye height. Scroll drives
-  progress; the range input supports keyboard navigation. Reduced motion removes
-  the extended scroll sequence and leaves manual viewpoint selection.
-- `scripts/check-landing-path.mjs`: samples 4,001 positions against actual walls
-  with 0.4 ft clearance and verifies interior eye height.
+`IsoHouse.tsx` draws the sample layout (`src/lib/sample-layout.json`, real solver output) as an SVG
+axonometric on a low-poly island. Walls come from `lib/walls.ts`; one CSS custom property (`--rise`)
+raises them from the drawn plan, so the hero needs no WebGL or script and cannot flash or shift.
 
-The sample has 1,708 sq ft (the requested brief is approximately 1,800 sq ft).
-The preview is explicitly labeled as a bundled layout; it does not imply a fresh
-AI generation. Statistics cite the 2024 U.S. Houzz & Home Study and describe 2023
-renovation activity among surveyed Houzz users, not custom-home design costs.
+## Figures (checked against the original sources on 2026-11-08)
 
-## Verification and limits
+| Figure | Source |
+|---|---|
+| 939,700 single-family homes started in the U.S. in 2025 | U.S. Census Bureau, New Residential Construction (`starts_cust.xlsx`, annual, 1 unit) |
+| $518B projected homeowner spending on improvements and repairs in 2026 | Harvard JCHS, LIRA press release, revised Apr 15, 2026 |
+| 91% of 2025 renovators hired at least one professional | 2026 U.S. Houzz & Home Renovation Trends Study, p. 22 |
+| 37% of 2025 renovators went over budget; 31% of those cited changed scope or design | same study, p. 11 |
+| 73.3% vs 0% of plans breaking a layout rule (raw model vs pipeline, 30 prompts) | `docs/eval/` |
 
-Production webpack build and type check pass. Landing-specific lint passes.
-Repository-wide lint has an existing anchor-navigation error in `SiteModel.tsx`
-and nine existing unused-variable warnings in the app's JavaScript modules.
+Houzz figures describe renovating homeowners on Houzz (n = 10,176), not custom-home design.
 
-Chromium checks at 1440×1000 and 390×844 verified initial canvases, original logo,
-2D/3D toggle, no horizontal overflow, tour progression, reduced-motion manual
-controls and the app CTA. No page exceptions occurred. Screenshots were visually
-reviewed. Geometry is architectural/schematic, not photorealistic. No live backend
-AI request was made, and Safari and physical mobile GPU performance were not tested.
+The longer scroll-driven 3D walkthrough version of this page is in commit `ebc6fed` on this branch.
