@@ -1,0 +1,20 @@
+{
+  "brief": "3 bed, 2 bath, open kitchen, home office, about 1,800 sq ft",
+  "units": "feet",
+  "footprint": { "width": 60, "depth": 30 },
+  "entrance": { "x": 20, "z": 30 },
+  "rooms": [
+    { "name": "Kitchen", "type": "kitchen", "x": 0, "z": 0, "w": 16, "d": 12 },
+    { "name": "Dining", "type": "dining", "x": 16, "z": 0, "w": 14, "d": 12 },
+    { "name": "Living", "type": "living", "x": 0, "z": 12, "w": 30, "d": 18 },
+    { "name": "Office", "type": "office", "x": 30, "z": 0, "w": 9, "d": 12 },
+    { "name": "Primary bath", "type": "bath", "x": 39, "z": 0, "w": 5, "d": 12 },
+    { "name": "Primary bedroom", "type": "bed", "x": 44, "z": 0, "w": 16, "d": 12 },
+    { "name": "Hall", "type": "hall", "x": 30, "z": 12, "w": 30, "d": 4 },
+    { "name": "Laundry", "type": "laundry", "x": 30, "z": 16, "w": 4, "d": 14 },
+    { "name": "Bath 2", "type": "bath", "x": 34, "z": 16, "w": 5, "d": 14 },
+    { "name": "Bedroom 3", "type": "bed", "x": 39, "z": 16, "w": 10, "d": 14 },
+    { "name": "Bedroom 2", "type": "bed", "x": 49, "z": 16, "w": 11, "d": 14 }
+  ],
+  "design_notes": "A 60 × 30 ft single-story rectangle. The west side is an open kitchen, dining, and living zone. A 4 ft hall reaches the office and bedrooms. The primary bath is ensuite; Bath 2 opens to the hall. This is a visual concept, not an engineered or BUILD-checked layout."
+}
