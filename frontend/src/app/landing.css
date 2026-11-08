@@ -169,6 +169,57 @@ html:has(.bl) { scroll-snap-type: y proximity; }
 .bl[data-motion="on"] .bl-rule:not(.is-in) .ic { background: #c9c5bc; }
 .bl-rulecount { font-size: 12.5px; color: var(--muted); text-align: right; }
 
+/* ---------------- vs. ChatGPT & Claude ---------------- */
+.bl-compare { background: linear-gradient(180deg, #dfe9f3, var(--paper) 38%); }
+.bl-cmp-intro { max-width: 760px; }
+.bl-cmp-intro .bl-lede { max-width: 60ch; }
+.bl-lede q { color: var(--ink); font-weight: 600; quotes: "“" "”"; }
+.bl-cmp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2.15fr); grid-template-rows: auto auto; gap: 16px; margin-top: clamp(28px, 4vw, 44px); }
+.bl-cmp-card.is-mine { grid-column: 2; grid-row: 1 / span 2; }
+.bl-cmp-card { background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.bl-cmp-card.is-mine { border-color: var(--leaf-400); box-shadow: 0 0 0 3px var(--leaf-100), var(--shadow); }
+.bl-cmp-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.bl-cmp-head b { display: block; font-size: 18px; letter-spacing: -0.02em; }
+.bl-cmp-head span { display: block; font-size: 12.5px; color: var(--muted); }
+.bl-cmp-card.is-mine .bl-cmp-head span { color: var(--leaf-800); font-weight: 600; }
+/* the app's 3D / Plan segmented toggle */
+.bl-seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--paper); border: 1px solid var(--line); flex: none; }
+.bl-seg button { font: inherit; font-size: 12.5px; border: 0; background: none; color: var(--muted); padding: 5px 12px; border-radius: 999px; cursor: pointer; transition: background .2s, color .2s; }
+.bl-seg button[aria-pressed="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(21, 21, 21, .1); }
+.bl-cmp-media { position: relative; aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden; background: var(--paper); border: 1px solid var(--line); }
+.bl-cmp-media img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.bl-walk-poster { all: unset; position: absolute; inset: 0; cursor: pointer; display: block; }
+.bl-walk-poster img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .5s var(--ease), filter .3s; }
+.bl-walk-poster:hover img { transform: scale(1.025); filter: brightness(.94); }
+.bl-walk-poster:focus-visible { outline: 2px solid var(--leaf-700); outline-offset: -4px; border-radius: 10px; }
+.bl-cmp-play { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); background: rgba(255, 255, 255, .94); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 600; white-space: nowrap; box-shadow: var(--shadow); }
+.bl-cmp-iso { position: absolute; inset: 0; display: grid; place-items: center; padding: 6%; background: linear-gradient(180deg, #eef3f7, var(--leaf-50)); }
+.bl-cmp-iso .bl-iso { max-height: 100%; animation: none !important; --rise: 1; transition: --rise .9s var(--ease); }
+.bl-cmp-iso.is-plan .bl-iso { --rise: 0; }
+.bl-cmp-note { font-size: 13.5px; line-height: 1.45; color: var(--muted); }
+.bl-cmp-card.is-mine .bl-cmp-note { color: var(--ink); }
+.bl-cmp-tablewrap { margin-top: 16px; background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow-x: auto; }
+.bl-cmp-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 640px; }
+.bl-cmp-table th, .bl-cmp-table td { padding: 11px 16px; text-align: left; vertical-align: middle; }
+.bl-cmp-table thead th { font-size: 12.5px; font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--line); }
+.bl-cmp-table thead th.is-mine { color: var(--leaf-800); }
+.bl-cmp-table tbody th { font-weight: 600; width: 28%; }
+.bl-cmp-table tbody tr + tr > * { border-top: 1px solid #efece6; }
+.bl-cmp-table td { color: var(--muted); width: 24%; }
+.bl-cmp-table td:last-child { background: var(--leaf-50); color: var(--ink); }
+.bl-cmp-table .ic { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font-size: 10.5px; margin-right: 8px; vertical-align: -3px; }
+.bl-cmp-table .is-yes .ic { background: var(--leaf-700); color: #fff; }
+.bl-cmp-table .is-no .ic { background: #f3e1db; color: var(--clay); }
+.bl-cmp-fine { margin-top: 14px; font-size: 12px; color: var(--muted); max-width: 90ch; }
+
+/* ---------------- walk through it ---------------- */
+.bl-walk { background: linear-gradient(180deg, var(--paper), #dfe9f3); }
+.bl-walk-grid { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
+.bl-walk-view { min-width: 0; }
+.bl-walk-view > button, .bl-walk-frame { position: relative; width: 100%; aspect-ratio: 4 / 3; max-height: 72vh; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); background: #2a2622; display: block; }
+.bl-walk-poster { position: relative !important; }
+.bl-walk-cap { margin-top: 10px; font-size: 12.5px; color: var(--muted); text-align: center; }
+
 /* ---------------- into the demo ---------------- */
 .bl-demo { background: linear-gradient(180deg, #dfe9f3 0%, var(--sky) 100%); text-align: center; padding-bottom: 0; }
 .bl-demo-inner { padding: 0 20px; margin: auto auto; width: 100%; max-width: 860px; }
@@ -180,7 +231,10 @@ html:has(.bl) { scroll-snap-type: y proximity; }
 
 /* ---------------- responsive ---------------- */
 @media (max-width: 960px) {
-  .bl-problem-grid, .bl-solution-grid { grid-template-columns: minmax(0, 1fr); }
+  .bl-problem-grid, .bl-solution-grid, .bl-walk-grid { grid-template-columns: minmax(0, 1fr); }
+  .bl-cmp-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .bl-cmp-card.is-mine { grid-column: 1 / -1; grid-row: 1; }
+  .bl-cmp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .bl-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .bl-stats li:nth-child(3) { border-left: 0; }
   .bl-stats li:nth-child(n + 3) { border-top: 1px solid var(--line); }
@@ -203,6 +257,8 @@ html:has(.bl) { scroll-snap-type: y proximity; }
   .bl-stats li { border-left: 0 !important; border-top: 1px solid var(--line); }
   .bl-stats li:first-child { border-top: 0; }
   .bl-proof-row { grid-template-columns: 96px 1fr 48px; font-size: 12.5px; }
+  .bl-cmp-grid { grid-template-columns: minmax(0, 1fr); }
+  .bl-cmp-card.is-mine .bl-cmp-media { min-height: 260px; }
   .bl-stepper { border-radius: 14px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -210,3 +266,24 @@ html:has(.bl) { scroll-snap-type: y proximity; }
 }
 
 @media (max-height: 940px) and (min-width: 641px) { .bl-scrollcue { display: none; } }
+
+/* BUILD's live model in the comparison card */
+.bl-cmp-3d { position: absolute; inset: 0; background: linear-gradient(180deg, #eef3f7, var(--leaf-50)); }
+.bl-cmp-3d canvas { width: 100%; height: 100%; display: block; }
+.bl-cmp-replay { position: absolute; right: 10px; bottom: 10px; font: inherit; font-size: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, .9); border-radius: 999px; padding: 5px 11px; cursor: pointer; opacity: 0; transition: opacity .2s; }
+.bl-cmp-3d:hover .bl-cmp-replay, .bl-cmp-replay:focus-visible { opacity: 1; }
+
+/* chatbots: small, quiet, their plan only */
+.bl-cmp-card.is-bot { padding: 12px; gap: 10px; box-shadow: none; background: rgba(255, 255, 255, .7); }
+.bl-cmp-card.is-bot .bl-cmp-head b { font-size: 15px; color: var(--muted); }
+.bl-cmp-card.is-bot .bl-cmp-media { aspect-ratio: 16 / 9; background: #f1efea; }
+.bl-cmp-card.is-bot .bl-cmp-media img { filter: grayscale(.85) contrast(.9) opacity(.75); padding: 6px; }
+.bl-cmp-verdict { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.bl-cmp-verdict .ic { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: #f3e1db; color: var(--clay); font-size: 10.5px; flex: none; }
+/* BUILD: the hero card */
+.bl-cmp-card.is-mine { padding: 16px; gap: 14px; }
+.bl-cmp-card.is-mine .bl-cmp-head b { font-size: 22px; }
+.bl-cmp-card.is-mine .bl-cmp-media { flex: 1; aspect-ratio: auto; min-height: 340px; border-color: var(--leaf-200); }
+.bl-cmp-stats { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; }
+.bl-cmp-stats li { background: var(--leaf-50); border: 1px solid #e0e8d9; border-radius: 10px; padding: 9px 12px; font-size: 12.5px; color: var(--muted); line-height: 1.3; }
+.bl-cmp-stats b { display: block; color: var(--leaf-800); font-size: 20px; letter-spacing: -0.02em; font-weight: 600; }
