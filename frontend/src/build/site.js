@@ -18,7 +18,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { BRAND } from "./core.js";
-import { STYLES, defaultExterior, buildExteriorHouse, parseExteriorPrompt } from "./exterior.js";
+import { STYLES, STYLE_PROMPTS, defaultExterior, buildExteriorHouse, parseExteriorPrompt, matchStyle } from "./exterior.js";
 import { ProjectionSkin } from "./projskin.js";
 import { neighborhoodOrientation, houseRotation } from "./orient.js";
 import { ORBIT, encodeGuides, filmOrbit, downloadOrbit, joinRing, release } from "./orbitvideo.js";
@@ -133,6 +133,17 @@ async function findDemo(label, layout) {
   } catch { return null; }
 }
 
+/**
+ * Picks the exterior preset named anywhere else in the app (the house brief, the design chat), so
+ * "a duke-style 3 bed" opens On site already in Duke gothic. Returns the style name, or null.
+ */
+export function setExteriorFromText(text) {
+  const name = matchStyle(text);
+  if (!name) return null;
+  if (state.ext.style !== name) state.ext = { ...STYLES[name], style: name };
+  return name;
+}
+
 async function geocode(q) {
   // Server route (src/app/api/geocode): Google Geocoding when keyed, else Nominatim.
   const r = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`);
@@ -168,7 +179,7 @@ export async function openSiteView(layout) {
         <div class="chips styles"></div>
         <div class="muted">Roof</div>
         <div class="seg roofs">${["gable", "hip", "flat", "shed"].map((r) => `<button type="button" data-roof="${r}">${r[0].toUpperCase() + r.slice(1)}</button>`).join("")}</div>
-        <label class="muted pitchrow">Pitch: <span class="pv"></span>/12<input type="range" class="pitch" min="2" max="12" step="1" /></label>
+        <label class="muted pitchrow">Pitch: <span class="pv"></span>/12<input type="range" class="pitch" min="2" max="18" step="1" /></label>
         <div class="cols">
           <label>Siding<input type="color" data-c="siding" /></label>
           <label>Trim<input type="color" data-c="trim" /></label>
@@ -397,7 +408,7 @@ export async function openSiteView(layout) {
     }
     const where = (state.label || "").replace(/ \(moved\)$/, "").split(",").slice(1).map((x) => x.trim())
       .filter((x) => x && !/^\d{4,}$/.test(x) && x !== "United States").slice(0, 4).join(", ");
-    const style = state.ext.style === "Custom" ? "custom-styled" : state.ext.style.toLowerCase();
+    const style = STYLE_PROMPTS[state.ext.style] ?? (state.ext.style === "Custom" ? "custom-styled" : state.ext.style.toLowerCase());
     const images = captureAngles();
     $(".sstat").textContent = "Rendering…";
     let done = 0;
