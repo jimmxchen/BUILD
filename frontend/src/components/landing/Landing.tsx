@@ -4,6 +4,7 @@
 import { IsoHouse } from "./IsoHouse";
 import { Logo } from "./Logo";
 import { BuildSequence, CountUp, RevealObserver, SectionDots } from "./interactive";
+import { ChatGPTCard, ClaudeCard, CompareCard, WalkthroughEmbed } from "./compare";
 import { APP_URL, GITHUB_URL, LAYOUT, PROMPT, SCALE, totalArea } from "./data";
 
 const SECTIONS = [
@@ -11,8 +12,23 @@ const SECTIONS = [
   { id: "problem", label: "The problem" },
   { id: "scale", label: "Who needs it" },
   { id: "solution", label: "Our solution" },
+  { id: "compare", label: "vs. ChatGPT & Claude" },
+  { id: "walk", label: "Walk through it" },
   { id: "demo", label: "Demo" },
 ];
+
+// Same brief in all three tools. ChatGPT and Claude outputs: comparison/standalone-ai-3d.
+const CMP_ROWS: { label: string; gpt: [boolean, string]; claude: [boolean, string]; build: [boolean, string] }[] = [
+  { label: "Checked against layout rules", gpt: [false, "Not checked"], claude: [false, "Not checked"], build: [true, "9 rules, before you see it"] },
+  { label: "Exact, measurable dimensions", gpt: [true, "Room-size list"], claude: [true, "Room labels"], build: [true, "Rulers, grid, tape measure"] },
+  { label: "Walk through at eye height", gpt: [false, "Orbit a model"], claude: [false, "Orbit a model"], build: [true, "Eye-level, photoreal"] },
+  { label: "Placed on your real lot", gpt: [false, "No"], claude: [false, "No"], build: [true, "Google 3D tiles, any address"] },
+  { label: "Edits are re-checked", gpt: [false, "Re-prompt, unchecked"], claude: [false, "Re-prompt, unchecked"], build: [true, "Every change re-checked"] },
+];
+
+const Mark = ({ v }: { v: [boolean, string] }) => (
+  <td className={v[0] ? "is-yes" : "is-no"}><span className="ic" aria-hidden="true">{v[0] ? "✓" : "✕"}</span><span className="bl-sr">{v[0] ? "Yes: " : "No: "}</span>{v[1]}</td>
+);
 
 const Arrow = () => (
   <svg className="bl-arrow" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 8H13M9 4L13 8L9 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -118,6 +134,57 @@ export default function Landing() {
             </div>
             <div className="bl-panel" data-reveal>
               <BuildSequence />
+            </div>
+          </div>
+        </section>
+
+        {/* ---------------- VS. CHATGPT & CLAUDE ---------------- */}
+        <section className="bl-compare bl-screen" id="compare" aria-labelledby="compare-title">
+          <div className="bl-wrap">
+            <div className="bl-cmp-intro" data-reveal>
+              <h2 id="compare-title">Same sentence. <em>Three very different houses.</em></h2>
+              <p className="bl-lede">We gave ChatGPT, Claude and BUILD the identical brief: <q>{PROMPT}</q>. Flip each between its plan and its 3D model.</p>
+            </div>
+            <div className="bl-cmp-grid" data-reveal>
+              <ChatGPTCard />
+              <ClaudeCard />
+              <CompareCard
+                tool="BUILD" tag="Our platform" mine
+                plan={<div className="bl-cmp-iso is-plan"><IsoHouse layout={LAYOUT} title={`BUILD's floor plan, ${sqft.toLocaleString()} square feet`} /></div>}
+                model={<div className="bl-cmp-iso"><IsoHouse layout={LAYOUT} title={`BUILD's 3D model of the same plan, ${sqft.toLocaleString()} square feet`} /></div>}
+                note={`${sqft.toLocaleString()} sq ft. The same solved layout becomes the plan, the 3D model and the walkthrough, and it passes every layout rule.`}
+              />
+            </div>
+            <div className="bl-cmp-tablewrap" data-reveal>
+              <table className="bl-cmp-table">
+                <caption className="bl-sr">What each tool gives you from the same brief</caption>
+                <thead><tr><th scope="col"><span className="bl-sr">Capability</span></th><th scope="col">ChatGPT</th><th scope="col">Claude</th><th scope="col" className="is-mine">BUILD</th></tr></thead>
+                <tbody>
+                  {CMP_ROWS.map((r) => (
+                    <tr key={r.label}><th scope="row">{r.label}</th><Mark v={r.gpt} /><Mark v={r.claude} /><Mark v={r.build} /></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="bl-cmp-fine">ChatGPT and Claude outputs are exploratory one-off runs (November 2026), shown as generated. Their scenes are visual concepts and were not run through a rule checker.</p>
+          </div>
+        </section>
+
+        {/* ---------------- WALK THROUGH IT ---------------- */}
+        <section className="bl-walk bl-screen" id="walk" aria-labelledby="walk-title">
+          <div className="bl-wrap bl-walk-grid">
+            <div className="bl-walk-copy" data-reveal>
+              <h2 id="walk-title">Don’t look at it. <em>Walk through it.</em></h2>
+              <p className="bl-lede">A chatbot hands you a dollhouse to spin. BUILD puts you inside, at eye height, in light that behaves like light.</p>
+              <ol className="bl-how">
+                <li><span className="bl-num">1</span><div><b>Eye level, not bird’s-eye</b>Stand in the doorway and see whether the hall feels tight before anyone builds it.</div></li>
+                <li><span className="bl-num">2</span><div><b>Photoreal, path-traced</b>Every view is rendered in Blender Cycles with real sky light, materials and furniture.</div></li>
+                <li><span className="bl-num">3</span><div><b>Room to room, like Street View</b>Click the floor arrows or the map to walk from the living room to the bedrooms.</div></li>
+              </ol>
+            </div>
+            <div className="bl-walk-view" data-reveal>
+              <WalkthroughEmbed />
+              <p className="bl-walk-cap">Drag to look around · click the floor arrows to walk</p>
             </div>
           </div>
         </section>

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Courtyard 1800 · House study</title>
+<style>
+:root{--ink:#1d302c;--muted:#76857e;--line:#dbe1d9;--paper:#f8f9f4;--green:#c4d4af}*{box-sizing:border-box}body{margin:0;font:14px system-ui,-apple-system,sans-serif;color:var(--ink);background:#eff1e9}header{height:76px;padding:0 30px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);background:var(--paper)}.brand{font-weight:800;font-size:17px;letter-spacing:-.6px}.brand span{font-weight:400;color:var(--muted);margin-left:16px;font-size:12px;letter-spacing:1.5px}.badge{font-size:11px;letter-spacing:1.5px;border:1px solid #b9c7b2;padding:8px 12px;border-radius:20px}main{display:grid;grid-template-columns:300px 1fr;height:calc(100vh - 76px)}aside{padding:30px 25px;overflow:auto;background:var(--paper);border-right:1px solid var(--line)}.eyebrow{font-size:10px;letter-spacing:2px;color:#788871;font-weight:700}h1{font-family:Georgia,serif;font-size:38px;font-weight:400;line-height:1.1;margin:15px 0}p{line-height:1.6;color:#66766e;font-size:12px}.stats{display:flex;gap:25px;padding:20px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin:22px 0}.stats strong{display:block;font-size:24px;font-weight:500}.stats small{font-size:10px;color:var(--muted)}.rooms{display:flex;flex-direction:column;gap:0;margin:14px 0 22px}.room{display:flex;justify-content:space-between;font-size:11px;padding:9px 0;border-bottom:1px solid #e7eae2}.room span:last-child{color:var(--muted)}button{font:inherit;border:1px solid #cbd4c5;border-radius:7px;background:#fff;padding:9px 12px;color:var(--ink);cursor:pointer}button:hover{background:#e5ebde}button.active{background:#213e34;color:white;border-color:#213e34}.controls{display:flex;flex-wrap:wrap;gap:7px}#export{background:#213e34;color:white;width:100%;margin-top:16px}section{position:relative;min-width:0;overflow:hidden}canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}canvas:active{cursor:grabbing}.toolbar{position:absolute;top:22px;left:25px;display:flex;gap:6px}.help{position:absolute;bottom:22px;left:25px;color:#72806e;font-size:11px}.caption{position:absolute;bottom:22px;right:25px;font-size:11px;color:#72806e}.legend{position:absolute;right:25px;top:25px;font-size:10px;letter-spacing:1px;color:#7a8873;pointer-events:none}details{font-size:11px;line-height:1.7;color:#74816e;margin-top:18px}summary{cursor:pointer;color:#3a5142}.footer-note{font-size:10px;line-height:1.5;margin-top:16px}#status{min-height:14px;margin-top:8px;font-size:10px;color:#74816e}@media(max-width:800px){main{grid-template-columns:220px 1fr}aside{padding:20px 16px}.brand span{display:none}h1{font-size:30px}.toolbar{left:10px;top:10px;flex-wrap:wrap;max-width:200px}.legend,.caption{display:none}}@media(max-width:560px){main{display:flex;flex-direction:column;height:auto}aside{order:2;border-right:0}.rooms,.stats,details,.footer-note{display:none}section{height:65vh;min-height:420px}header{padding:0 16px;height:60px}h1{font-size:27px;margin:10px 0}aside p{margin:8px 0}}
+</style></head><body>
+<header><div class="brand">FORM / 01 <span>RESIDENTIAL STUDIES</span></div><div class="badge">CONCEPT · 1,800 SQ FT</div></header>
+<main><aside><div class="eyebrow">A SINGLE-STORY HOUSE</div><h1>Room to<br>live well.</h1><p>Three bedrooms, two baths, an open kitchen, and a dedicated home office. One independently designed spatial study.</p><div class="stats"><div><strong>45 × 40</strong><small>FOOTPRINT / FEET</small></div><div><strong>3 / 2</strong><small>BEDS / BATHS</small></div></div><div class="eyebrow">CLEAR ROOM DIMENSIONS / FT</div><div class="rooms" id="roomList"></div><div class="eyebrow" style="margin-bottom:12px">EXPLORE THE MODEL</div><div class="controls"><button id="walls">Full-height walls</button><button id="labels" class="active">Labels</button><button id="route">Circulation</button></div><button id="export">Export current view · PNG ↗</button><div id="status"></div><details><summary>Assumptions & limitations</summary>Single story; exterior walls 6 inches, partitions 6 inches, wall height 9 feet, roof omitted for visibility. The 1,800 sq ft figure is gross exterior footprint, not net living area. Dimensions below are clear spans. Entrance faces east. Concept only: structure, zoning, egress, accessibility, HVAC, plumbing and local codes are unverified. Door swings are schematic; windows are not modeled.</details><div class="footer-note">Brief: “3 bed, 2 bath, open kitchen, home office, about 1,800 sq ft”</div></aside>
+<section><canvas id="scene" aria-label="Interactive three-dimensional house model. Drag to orbit, shift drag to pan, scroll to zoom."></canvas><div class="toolbar"><button id="iso" class="active">3D view</button><button id="plan">Plan view</button><button id="reset">Reset ↺</button></div><div class="legend">ORTHOGRAPHIC 3D · EAST ENTRY</div><div class="help">DRAG TO ORBIT &nbsp; · &nbsp; SCROLL TO ZOOM &nbsp; · &nbsp; SHIFT + DRAG TO PAN</div><div class="caption">Measured in feet · roof removed</div></section></main>
+<script>
+'use strict';
+// No imports, network calls, or assets. Orthographic 3D mesh renderer, in feet.
+const canvas=document.getElementById('scene'),ctx=canvas.getContext('2d');
+const rooms=[
+{id:'bed2',name:'Bedroom 2',x:.5,y:.5,w:11.75,d:15.25,color:'#decfc1',label:[6.1,9.8]},
+{id:'bed3',name:'Bedroom 3',x:12.75,y:.5,w:12,d:15.25,color:'#decfc1',label:[18.7,9.8]},
+{id:'office',name:'Home office',x:25.25,y:.5,w:9.5,d:15.25,color:'#c5d2c1',label:[30,10]},
+{id:'bath',name:'Shared bath',x:35.25,y:.5,w:9.25,d:7.25,color:'#ccd8d5',label:[39.7,4.8]},
+{id:'hall',name:'Hall',x:.5,y:16.25,w:24.25,d:3.5,color:'#e5dfce',label:[12,18]},
+{id:'primary',name:'Primary bedroom',x:.5,y:20.25,w:14.25,d:19.25,color:'#d9c5b4',label:[7.6,28.2]},
+{id:'dressing',name:'Dressing',x:15.25,y:20.25,w:9.5,d:9.5,color:'#e2d4c0',label:[20,27.8]},
+{id:'ensuite',name:'Primary bath',x:15.25,y:30.25,w:9.5,d:9.25,color:'#ccd8d5',label:[20,34.5]}
+];
+const openZones=[{name:'Living / entry',x:36,y:16.8},{name:'Dining',x:35.2,y:25.6},{name:'Open kitchen',x:35,y:36.3}];
+document.getElementById('roomList').innerHTML=rooms.filter(r=>r.id!=='hall'&&r.id!=='dressing').map(r=>`<div class="room"><span>${r.name}</span><span>${r.w} × ${r.d}</span></div>`).join('');
+const state={azimuth:.25,elevation:1.04,zoom:1,panX:0,panY:0,fullWalls:false,labels:true,route:false};
+let faces=[],W=1200,H=900,dpr=1,scale=1;
+const wallColor='#e8e8dc',wood='#b78e63',dark='#456455',metal='#b3c2be';
+function tint(hex,f){let c=hex.replace('#','');return '#'+[0,2,4].map(i=>Math.round(Math.min(255,parseInt(c.slice(i,i+2),16)*f)).toString(16).padStart(2,'0')).join('')}
+function box(x,y,z,w,d,h,c){if(w<=0||d<=0||h<=0)return;const p=[[x,y,z],[x+w,y,z],[x+w,y+d,z],[x,y+d,z],[x,y,z+h],[x+w,y,z+h],[x+w,y+d,z+h],[x,y+d,z+h]];const defs=[[[4,5,6,7],[0,0,1],1.05],[[0,1,5,4],[0,-1,0],.84],[[1,2,6,5],[1,0,0],.95],[[2,3,7,6],[0,1,0],.72],[[3,0,4,7],[-1,0,0],.8]];for(const [ids,n,k] of defs)faces.push({p:ids.map(i=>p[i]),n,c:tint(c,k)})}
+// All gaps are real omissions in wall meshes. Full-height mode includes door headers.
+const walls=[
+ {axis:'h',v:.25,a:.25,b:44.75,gaps:[]}, {axis:'h',v:39.75,a:.25,b:44.75,gaps:[]},
+ {axis:'v',v:.25,a:.5,b:39.5,gaps:[]},{axis:'v',v:44.75,a:.5,b:39.5,gaps:[[10,13,'entry']]},
+ {axis:'v',v:12.5,a:.5,b:15.75,gaps:[]},
+ {axis:'h',v:16,a:.5,b:25.25,gaps:[[8.5,11.5,'bed2'],[20,23,'bed3']]},
+ {axis:'h',v:20,a:.5,b:25.25,gaps:[[20,23,'suite']]},
+ {axis:'v',v:25,a:.5,b:15.75,gaps:[]},{axis:'v',v:25,a:20.25,b:39.5,gaps:[]},
+ {axis:'v',v:15,a:20.25,b:39.5,gaps:[[23,26,'primary']]},
+ {axis:'h',v:30,a:15.25,b:24.75,gaps:[[20,23,'ensuite']]},
+ {axis:'v',v:35,a:.5,b:15.75,gaps:[[10,13,'office']]},
+ {axis:'h',v:16,a:25.25,b:34.75,gaps:[]},
+ {axis:'h',v:8,a:35.25,b:44.5,gaps:[[39,42,'bath']]}
+];
+function wallPiece(w,a,b,z,h){if(w.axis==='h')box(a,w.v-.25,z,b-a,.5,h,wallColor);else box(w.v-.25,a,z,.5,b-a,h,wallColor)}
+function bed(x,y,w,d){box(x-.25,y-.25,.08,w+.5,d+.5,.06,'#c2b29d');box(x,y,.14,w,d,1.2,wood);box(x+.08,y+.08,1.34,w-.16,d-.16,.55,'#f8f5e9');box(x+.1,y+1.6,1.91,w-.2,d-1.65,.08,'#9fae97');box(x-.1,y-.18,.1,w+.2,.22,3,'#b9a188');box(x+.25,y+.22,1.94,w/2-.4,.9,.17,'#ffffff');box(x+w/2+.1,y+.22,1.94,w/2-.4,.9,.17,'#ffffff')}
+function chair(x,y,rot=false){box(x,y,0,1.5,1.5,1.3,wood);box(x,y,1.3,1.5,1.5,.25,'#c9c9ad');if(rot)box(x,y,1.5,.18,1.5,1.2,wood);else box(x,y,1.5,1.5,.18,1.2,wood)}
+function plant(x,y){box(x,y,.02,.85,.85,1,'#b89b79');box(x-.12,y-.12,1,1.1,1.1,.8,'#7e976f');box(x+.06,y+.04,1.7,.75,.75,.7,'#8fa47b')}
+function toilet(x,y){box(x,y,0,1.4,2.2,1.2,'#e9eddf');box(x+.03,y,1.2,1.34,.45,1.1,'#fafbf2');box(x+.12,y+.7,1.2,1.16,1.25,.14,'#ffffff')}
+function vanity(x,y,w){box(x,y,0,w,1.8,2.6,wood);box(x-.04,y-.04,2.6,w+.08,1.9,.14,'#f4f3e9');box(x+.5,y+.3,2.75,1.7,1.1,.02,metal)}
+function build(){faces=[];box(-.3,-.3,-.6,45.6,40.6,.55,'#b8bfae');box(.5,.5,-.04,44,39,.04,'#e8ddc8');for(const r of rooms)box(r.x,r.y,.06,r.w,r.d,.035,r.color);
+// Subtle floorboards run across all living spaces.
+
+for(const w of walls){let start=w.a;for(const g of w.gaps){wallPiece(w,start,g[0],0,state.fullWalls?9:1.25);if(state.fullWalls)wallPiece(w,g[0],g[1],7,2);start=g[1]}wallPiece(w,start,w.b,0,state.fullWalls?9:1.25)}
+// Door thresholds, plus a blue exterior arrival pad.
+for(const w of walls)for(const [a,b,id] of w.gaps){if(w.axis==='h')box(a,w.v-.3,.11,b-a,.6,.04,'#c1a77c');else box(w.v-.3,a,.11,.6,b-a,.04,'#c1a77c')}
+box(45.01,9.2,-.05,3.8,4.6,.13,'#c4cec0');box(45.2,10.15,.1,2.5,2.7,.05,'#8f9c81');
+bed(3,2.1,5,6.6);box(9,.9,0,2,4.4,2.9,'#b6a68a');box(1.1,2.2,0,1.2,1.4,1.8,wood);bed(15,2.1,5,6.6);box(22,.9,0,2,4.4,2.9,'#b6a68a');
+bed(3,32,6.1,6.8);box(1.2,32.1,0,1.4,1.6,1.9,wood);box(10,32.1,0,1.4,1.6,1.9,wood);box(1.2,21,0,6.5,1.7,2.9,wood);plant(11.8,37.5);
+// Dressing room: shallow wardrobe, clear route along the south side.
+box(15.8,27,0,1.3,2.2,3,'#ad9c80');box(23.1,21,0,1.2,6.2,3,'#ad9c80');
+// Bathrooms: shower/tub, toilet, vanity.
+box(15.7,36,.1,3.6,3.0,.16,'#eff3ec');box(15.7,36,.26,3.6,.1,2.2,'#a5c1be');box(15.7,36,.26,.1,3,2.2,'#a5c1be');toilet(22.5,36.6);vanity(15.7,30.8,3.2);
+box(35.8,1,.1,5.3,2.5,1.5,'#f2f5ed');box(36.15,1.3,1.61,4.6,1.9,.025,'#c2d4ce');toilet(42.2,1);vanity(35.8,5.3,3.8);
+// Office desk / visitor chair.
+box(26.1,1.2,0,7.7,2.4,2.5,wood);box(26,1.1,2.5,7.9,2.6,.2,'#c1a57e');box(29,1.9,2.7,2.5,.18,1.4,dark);box(29.3,2.6,2.73,1.8,.6,.04,'#a6ada0');chair(29.7,4.2);box(26,13.4,0,5.5,1.7,2.8,'#b6a68a');plant(32.8,13.8);
+// Living room: rug, couch, table, chair, and low media console.
+box(34.8,12.8,.105,7.4,7.1,.035,'#c3c9b1');box(35.5,14.5,0,5.5,2.5,1.2,'#809783');box(35.5,16.6,1.2,5.5,.45,1.25,'#809783');for(let i=0;i<3;i++)box(35.7+i*1.72,14.7,1.2,1.6,1.7,.35,'#a9b8a2');box(37,13,.2,3,1,1.1,wood);chair(35.5,18.5,true);box(43.2,8.4,0,.8,1.2,1.8,wood);plant(42.7,19.8);
+// Dining table with six seats, toward the open kitchen.
+box(32.7,23,.1,.22,3.8,2.3,dark);box(37.9,23,.1,.22,3.8,2.3,dark);box(32.2,22.7,2.4,6.4,3.7,.22,wood);for(let i=0;i<3;i++){chair(32.4+i*2.3,20.8);chair(32.4+i*2.3,26.8)}
+// L-shaped kitchen and island. Aisles at least 3 ft in nominal geometry.
+box(26,37,0,17.5,2,2.8,'#8a9e87');box(41.5,29.5,0,2,7.5,2.8,'#8a9e87');box(26,37,2.8,17.5,2,.16,'#edece0');box(41.5,29.5,2.8,2,7.5,.16,'#edece0');box(26.1,34,0,2.6,2.6,5.8,'#b9c7c1');box(26,33.8,5.8,2.8,2.9,.12,'#dbe2d5');box(32,37.3,2.97,2.5,1.3,.04,'#8daba7');box(41.8,31.8,2.97,1.5,2,.05,'#46564e');box(32,31.3,0,6.2,2.5,2.8,'#8a9e87');box(31.8,31.1,2.8,6.6,2.9,.18,'#f0eee0');for(let i=0;i<3;i++)chair(32.1+i*2.2,29.1);plant(39.4,37.5);
+}
+function project(p){const x=p[0]-22.5,y=p[1]-20,z=p[2],a=state.azimuth,e=state.elevation;const right=Math.cos(a)*x+Math.sin(a)*y,toward=Math.sin(a)*x-Math.cos(a)*y;return [W/2+state.panX+scale*right,H/2+state.panY+scale*(Math.sin(e)*toward-Math.cos(e)*z),Math.cos(e)*toward+Math.sin(e)*z]}
+function line(points,color,width=1,dash=[]){ctx.beginPath();points.forEach((p,i)=>{const q=project(p);i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1])});ctx.strokeStyle=color;ctx.lineWidth=width;ctx.setLineDash(dash);ctx.stroke();ctx.setLineDash([])}
+function label(text,x,y,z=0,small=false){const p=project([x,y,z]);const fs=small?10:12;ctx.font=`${small?'400':'600'} ${fs}px system-ui, sans-serif`;const tw=ctx.measureText(text).width;ctx.fillStyle=small?'rgba(246,247,239,.82)':'rgba(249,249,240,.93)';ctx.fillRect(p[0]-tw/2-6,p[1]-fs+1,tw+12,fs+9);ctx.textAlign='center';ctx.fillStyle=small?'#6a7765':'#2c493b';ctx.fillText(text,p[0],p[1]+3)}
+function dimension(a,b,text){line([a,b],'#8c9d84',1);const dx=b[0]-a[0],dy=b[1]-a[1];for(const p of [a,b])line([[p[0]-(dy? .45:0),p[1]-(dx?.45:0),0],[p[0]+(dy?.45:0),p[1]+(dx?.45:0),0]],'#8c9d84');label(text,(a[0]+b[0])/2,(a[1]+b[1])/2,.1,true)}
+const paths=[[[46.6,11.5],[43,11.5],[43,18],[27,18],[10,18],[10,14.5]],[[27,18],[21.5,18],[21.5,14.5]],[[21.5,18],[21.5,24.5],[13.8,24.5]],[[21.5,24.5],[21.5,32]],[[43,11.5],[37.5,11.5],[33,11.5]],[[43,11.5],[40.5,11.5],[40.5,6.5]],[[27,18],[29,23],[29,29],[30,35]]];
+function render(){build();ctx.clearRect(0,0,W,H);ctx.fillStyle='#eff1e7';ctx.fillRect(0,0,W,H);const a=state.azimuth,e=state.elevation;scale=Math.min(W/66,H/60)*state.zoom;ctx.strokeStyle='#e3e8dc';ctx.lineWidth=.7;for(let i=-15;i<=60;i+=5){line([[i,-10,-.65],[i,55,-.65]],'#e1e6d9',.65);line([[-10,i,-.65],[60,i,-.65]],'#e1e6d9',.65)}
+const v=[Math.sin(a)*Math.cos(e),-Math.cos(a)*Math.cos(e),Math.sin(e)];const visible=faces.filter(f=>f.n.reduce((s,n,i)=>s+n*v[i],0)>.00001).map(f=>({...f,q:f.p.map(project)}));// Orthographic triangle rasterization with a depth buffer: correct occlusion
+// even when a whole-house floor polygon overlaps small furnishings.
+const iw=canvas.width,ih=canvas.height,pixels=ctx.getImageData(0,0,iw,ih),data=pixels.data,depth=new Float32Array(iw*ih);depth.fill(-Infinity);
+function triangle(v0,v1,v2,rgb){const a=[v0[0]*dpr,v0[1]*dpr,v0[2]],b=[v1[0]*dpr,v1[1]*dpr,v1[2]],c=[v2[0]*dpr,v2[1]*dpr,v2[2]];const den=(b[1]-c[1])*(a[0]-c[0])+(c[0]-b[0])*(a[1]-c[1]);if(Math.abs(den)<1e-8)return;const x0=Math.max(0,Math.floor(Math.min(a[0],b[0],c[0]))),x1=Math.min(iw-1,Math.ceil(Math.max(a[0],b[0],c[0]))),y0=Math.max(0,Math.floor(Math.min(a[1],b[1],c[1]))),y1=Math.min(ih-1,Math.ceil(Math.max(a[1],b[1],c[1])));for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const w0=((b[1]-c[1])*(x+.5-c[0])+(c[0]-b[0])*(y+.5-c[1]))/den,w1=((c[1]-a[1])*(x+.5-c[0])+(a[0]-c[0])*(y+.5-c[1]))/den,w2=1-w0-w1;if(w0<-.00001||w1<-.00001||w2<-.00001)continue;const z=w0*a[2]+w1*b[2]+w2*c[2],i=y*iw+x;if(z>=depth[i]){depth[i]=z;const k=i*4;data[k]=rgb[0];data[k+1]=rgb[1];data[k+2]=rgb[2];data[k+3]=255}}}
+for(const f of visible){const c=f.c,rgb=[1,3,5].map(i=>parseInt(c.slice(i,i+2),16));triangle(f.q[0],f.q[1],f.q[2],rgb);triangle(f.q[0],f.q[2],f.q[3],rgb)}ctx.putImageData(pixels,0,0);
+
+// Door swing outlines in floor plane, matching the actual openings.
+for(const w of walls)for(const [a,b]of w.gaps){if(w.axis==='h'){const side=(w.v===16||w.v===8)?-1:1;const pts=[];for(let t=0;t<=16;t++){const v=t/16*Math.PI/2;pts.push([a+(b-a)*Math.cos(v),w.v+side*(b-a)*Math.sin(v),.16])}line(pts,'#9caa91',.8,[3,3]);line([[a,w.v,.16],[a,w.v+side*(b-a),.16]],'#9caa91',1)}else {const side=(w.v>40||w.v===35)?-1:1;const pts=[];for(let t=0;t<=16;t++){const v=t/16*Math.PI/2;pts.push([w.v+side*(b-a)*Math.sin(v),a+(b-a)*Math.cos(v),.16])}line(pts,'#9caa91',.8,[3,3]);line([[w.v,a,.16],[w.v+side*(b-a),a,.16]],'#9caa91',1)}}
+if(state.route)for(const path of paths)line(path.map(p=>[...p,3.6]),'#bf7249',2.5,[6,4]);
+if(state.labels){for(const r of rooms)label(r.name,...r.label,3.9);for(const z of openZones)label(z.name,z.x,z.y,4.1);label('ENTRANCE',48.2,11.5,.2,true)}
+dimension([0,-3,0],[45,-3,0],'45 ft');dimension([-3,0,0],[-3,40,0],'40 ft');line([[47,34,.1],[47,39,.1]],'#69815d',1.5);line([[46.5,38,.1],[47,39,.1],[47.5,38,.1]],'#69815d',1.5);label('N',47,40,.1,true);
+}
+function resize(){const r=canvas.getBoundingClientRect();W=r.width;H=r.height;dpr=Math.min(window.devicePixelRatio||1,2);canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);render()}
+function active(id,on){document.getElementById(id).classList.toggle('active',on)}
+function reset(){Object.assign(state,{azimuth:.25,elevation:1.04,zoom:1,panX:0,panY:0});active('iso',true);active('plan',false);render()}
+document.getElementById('iso').onclick=reset;document.getElementById('reset').onclick=reset;document.getElementById('plan').onclick=()=>{state.azimuth=0;state.elevation=Math.PI/2;state.zoom=1;state.panX=state.panY=0;active('plan',true);active('iso',false);render()};
+document.getElementById('walls').onclick=()=>{state.fullWalls=!state.fullWalls;active('walls',state.fullWalls);document.getElementById('walls').textContent=state.fullWalls?'Cutaway walls':'Full-height walls';render()};
+for(const id of ['labels','route'])document.getElementById(id).onclick=()=>{state[id]=!state[id];active(id,state[id]);render()};
+document.getElementById('export').onclick=()=>{render();const a=document.createElement('a');a.download='house-current-view.png';a.href=canvas.toDataURL('image/png');a.click();document.getElementById('status').textContent='PNG exported from the current scene.'};
+let dragging=null;
+canvas.onpointerdown=e=>{dragging={x:e.clientX,y:e.clientY,id:e.pointerId};canvas.setPointerCapture(e.pointerId)};
+canvas.onpointermove=e=>{if(!dragging)return;const dx=e.clientX-dragging.x,dy=e.clientY-dragging.y;dragging.x=e.clientX;dragging.y=e.clientY;if(e.shiftKey||e.buttons===2){state.panX+=dx;state.panY+=dy}else{state.azimuth+=dx*.006;state.elevation=Math.max(.3,Math.min(Math.PI/2,state.elevation+dy*.006));active('plan',false);active('iso',false)}render()};
+canvas.onpointerup=()=>dragging=null;canvas.onpointercancel=()=>dragging=null;canvas.oncontextmenu=e=>e.preventDefault();canvas.onwheel=e=>{e.preventDefault();state.zoom=Math.max(.5,Math.min(2.4,state.zoom*Math.exp(-e.deltaY*.001)));render()};
+window.addEventListener('resize',resize);window.HOUSE={rooms,walls,state,render,resize,project,paths,footprint:{width:45,depth:40,area:1800},setSize:(w,h)=>{W=w;H=h;canvas.width=w;canvas.height=h;ctx.setTransform(1,0,0,1,0,0);render()}};resize();
+</script></body></html>
