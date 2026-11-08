@@ -158,6 +158,8 @@ async function nominatimFallback(lat, lon, headers) {
 // Same photos -> same id -> served from disk, never paid for twice.
 const SPIN_DIR = join(ROOT, "renders", "spin");
 const spinJobs = new Map();
+// The one-clip orbit is the default spin: 720p (~$1.01 for 10 s) looks much sharper than 360p (~$0.34).
+const ORBIT_RES = process.env.ORBIT_RESOLUTION || "720p";
 const SPIN_TRIES = Number(process.env.SPIN_TRIES || 1); // no paid re-films by default: a failed gap becomes a cross-fade
 const PER_CLIP = 120; // output frames per clip after re-timing (4 gaps x 120 = 480 frames, one per 0.75 deg)
 
@@ -190,8 +192,8 @@ const imagePart = (u) => { const m = u.match(/^data:(image\/\w+);base64,(.+)$/);
 async function omniClip(first, last, prompt) {
   return omniCall([imagePart(first), imagePart(last), { type: "text", text: prompt }]);
 }
-async function omniCall(input) {
-  const body = { model: OMNI_MODEL, input, response_format: { type: "video", resolution: OMNI_RES, aspect_ratio: "16:9" } };
+async function omniCall(input, resolution = OMNI_RES) {
+  const body = { model: OMNI_MODEL, input, response_format: { type: "video", resolution, aspect_ratio: "16:9" } };
   let lastErr;
   for (let attempt = 0; attempt < 2; attempt++) {
     const r = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
@@ -270,7 +272,7 @@ async function startOrbit(req, res) {
   if (!Array.isArray(frames) || frames.length < 48 || frames.length > 300 || !frames.every(img) || (hero != null && !img(hero)) || typeof prompt !== "string" || prompt.length > 3000) {
     return send(res, 400, { error: "Expected { frames: 48-300 data URLs (one full orbit), hero?: data URL, prompt? }" });
   }
-  const id = createHash("sha1").update(JSON.stringify(["orbit", frames, hero, prompt, OMNI_RES, OMNI_MODEL])).digest("hex").slice(0, 16);
+  const id = createHash("sha1").update(JSON.stringify(["orbit", frames, hero, prompt, ORBIT_RES, OMNI_MODEL])).digest("hex").slice(0, 16);
   const dir = join(SPIN_DIR, id);
   if (existsSync(join(dir, "done.json"))) return send(res, 200, { id, ...JSON.parse(readFileSync(join(dir, "done.json"), "utf8")), status: "done" });
   if (!spinJobs.has(id) || spinJobs.get(id).status === "error") {
@@ -282,13 +284,15 @@ async function startOrbit(req, res) {
 }
 
 async function buildOrbit(id, dir, frames, hero, prompt, job) {
+  const t0 = Date.now();
   await mkdir(dir, { recursive: true });
   const guide = join(dir, "guide.mp4"), out = join(dir, "orbit.mp4");
   if (!existsSync(out)) {
     const g = join(dir, "g"); await rm(g, { recursive: true, force: true }); await mkdir(g);
     await Promise.all(frames.map((f, i) => writeFile(join(g, `g_${String(i + 1).padStart(4, "0")}.jpg`), Buffer.from(f.split(",")[1], "base64"))));
     await run("ffmpeg", ["-loglevel", "error", "-y", "-framerate", String(frames.length / 10), "-i", join(g, "g_%04d.jpg"),
-      "-vf", "scale=640:360,format=yuv420p", "-r", "24", "-c:v", "libx264", "-crf", "20", guide]);
+      "-vf", "scale=960:540,format=yuv420p", "-r", "24", "-c:v", "libx264", "-crf", "18", guide]);
+    console.log(`orbit ${id}: guide encoded in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
     await rm(g, { recursive: true, force: true });
     const text = (hero ? "Turn this plain 3D-model turntable video into real 10-second drone footage of the house in <IMAGE_REF_0>. "
       : "Restyle this 10-second 3D architectural animation as a photorealistic architectural visualization of the same house. ") +
@@ -296,10 +300,13 @@ async function buildOrbit(id, dir, frames, hero, prompt, job) {
       "Keep the house shape, size and position in the frame exactly as in the video. " +
       (hero ? "Its siding, trim, roof, windows, doors, porch, landscaping, trees, lawn, neighboring houses and late-afternoon light match the photo and stay consistent all the way round. "
         : "Keep the house's siding, trim, roof, windows, doors and colors as shown, made photorealistic. Add a real green lawn, mature trees and softly out-of-focus neighboring houses, consistent all the way round, in late-afternoon light. ") +
+      "High detail and sharp focus on the house: crisp siding lines, trim, window frames and glass reflections, clean roof edges, true straight walls; stable, no flicker or shimmer. " +
       "Replace the plain gray backdrop and ground with that real yard and neighborhood. Nothing moves except the camera. No cuts, no zoom, no morphing, no people, no cars, no text." +
       (prompt ? ` ${prompt}` : "");
     const vid = { type: "video", mime_type: "video/mp4", data: (await readFile(guide)).toString("base64") };
-    await writeFile(out, await omniCall([vid, ...(hero ? [imagePart(hero)] : []), { type: "text", text }]));
+    const t1 = Date.now();
+    await writeFile(out, await omniCall([vid, ...(hero ? [imagePart(hero)] : []), { type: "text", text }], ORBIT_RES));
+    console.log(`orbit ${id}: Omni ${ORBIT_RES} clip in ${((Date.now() - t1) / 1000).toFixed(1)} s`);
   }
   const cut = await hardCut(out);
   const tmp = join(dir, "tmp"); await rm(tmp, { recursive: true, force: true }); await mkdir(tmp);
@@ -320,7 +327,8 @@ async function buildOrbit(id, dir, frames, hero, prompt, job) {
   }
   await rm(tmp, { recursive: true, force: true });
   console.log(`orbit ${id}: ${n} frames, hard cut ${cut ? cut.toFixed(2) : "none"}, loop match ${loop.toFixed(2)}`);
-  const meta = { n, total: 1, done: 1, clips: 1, mode: "orbit", cut, loop, resolution: OMNI_RES };
+  const meta = { n, total: 1, done: 1, clips: 1, mode: "orbit", cut, loop, resolution: ORBIT_RES, seconds: Math.round((Date.now() - t0) / 1000) };
+  console.log(`orbit ${id}: done in ${meta.seconds} s total`);
   await writeFile(join(dir, "done.json"), JSON.stringify(meta));
   Object.assign(job, meta, { status: "done" });
 }

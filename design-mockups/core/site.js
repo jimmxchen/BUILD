@@ -469,7 +469,7 @@ export async function openSiteView(layout) {
   ov.seamless = () => makeSeamless(shotToken); // dev hook: rebuild the seamless spin from the current photos
   // A full 360 orbit of the plain 3D model, same camera path as the photos (free: rendered locally).
   // It is the motion guide for the one-clip photoreal orbit (/api/orbit).
-  const orbitFrames = (n = 240) => captureAngles(Array.from({ length: n }, (_, k) => ({ off: 30 + (k * 360) / n, elev: 8, fill: 0.6 })), { w: 640, h: 360, projectors: false, skinned: true });
+  const orbitFrames = (n = 240) => captureAngles(Array.from({ length: n }, (_, k) => ({ off: 30 + (k * 360) / n, elev: 8, fill: 0.68 })), { w: 960, h: 540, projectors: false, skinned: true });
   ov.orbitFrames = orbitFrames; // dev hook
   const scheduleShots = () => { if (disposed) return; clearTimeout(shotTimer); shotTimer = setTimeout(() => { if (!disposed) runShots(); }, 400); };
   $(".rerender").addEventListener("click", runShots);
