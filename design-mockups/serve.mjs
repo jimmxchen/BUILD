@@ -223,8 +223,8 @@ async function hardCut(file) {
   return m > 0.12 ? m : 0;
 }
 /** SSIM of the clip's last frame vs the photo it should end on (1 = same view). */
-async function endMatch(file, anchor, dir) {
-  const last = join(dir, "_last.png"), want = join(dir, "_want.img");
+async function endMatch(file, anchor) {
+  const last = `${file}.last.png`, want = `${file}.want.img`; // per clip: clips are checked in parallel
   await writeFile(want, Buffer.from(anchor.split(",")[1], "base64"));
   await run("ffmpeg", ["-loglevel", "error", "-y", "-sseof", "-0.1", "-i", file, "-frames:v", "1", "-update", "1", last]);
   const { stderr } = await run("ffmpeg", ["-hide_banner", "-i", last, "-i", want, "-lavfi", "[0]scale=320:180[x];[1]scale=320:180[y];[x][y]ssim", "-f", "null", "-"]);
@@ -278,15 +278,15 @@ async function buildSpin(id, dir, frames, prompt, job) {
       if (!existsSync(f)) {
         // The model sometimes holds the first view and then hard-cuts to the last one. That is
         // exactly the jump we are trying to remove: retry once, then fall back to a soft blend.
-        for (let attempt = 0; attempt < 2 && !existsSync(f); attempt++) {
+        for (let attempt = 0; attempt < 2 && !existsSync(f); attempt++) try {
           const tmpClip = `${f}.try${attempt}.mp4`;
-          await writeFile(tmpClip, await omniClip(frames[k], frames[(k + 1) % N], text));
+          if (!existsSync(tmpClip)) await writeFile(tmpClip, await omniClip(frames[k], frames[(k + 1) % N], text)); // a crashed run may have left a paid attempt
           const cut = await hardCut(tmpClip);
-          const end = cut ? 0 : await endMatch(tmpClip, frames[(k + 1) % N], dir);
+          const end = cut ? 0 : await endMatch(tmpClip, frames[(k + 1) % N]);
           const good = !cut && end >= 0.7;
           console.log(`spin ${id} clip ${k}: ${cut ? `hard cut (${cut.toFixed(2)})` : `continuous, end match ${end.toFixed(2)}`}${good ? "" : " -> rejected"}`);
-          if (good) await run("mv", [tmpClip, f]); else await rm(tmpClip);
-        }
+          if (good) await run("mv", [tmpClip, f]); else await run("mv", [tmpClip, `${f}.rejected${attempt}.mp4`]); // paid for: keep to inspect
+        } catch (err) { console.log(`spin ${id} clip ${k}: ${err.message}`); if (/credits|quota|40[13]/.test(err.message)) break; }
         if (!existsSync(f)) await blendClip(frames[k], frames[(k + 1) % N], f, dir, k);
       }
       clips[k] = f; job.done++;
