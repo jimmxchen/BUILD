@@ -170,7 +170,7 @@ html:has(.bl) { scroll-snap-type: y proximity; }
 .bl-rulecount { font-size: 12.5px; color: var(--muted); text-align: right; }
 
 /* ---------------- vs. ChatGPT & Claude ---------------- */
-.bl-compare { background: linear-gradient(180deg, #dfe9f3, var(--paper) 38%); }
+.bl-compare { background: linear-gradient(180deg, #dfe9f3, var(--paper) 38%, var(--paper) 70%, #dfe9f3); }
 .bl-cmp-intro { max-width: 760px; }
 .bl-cmp-intro .bl-lede { max-width: 60ch; }
 .bl-lede q { color: var(--ink); font-weight: 600; quotes: "“" "”"; }
